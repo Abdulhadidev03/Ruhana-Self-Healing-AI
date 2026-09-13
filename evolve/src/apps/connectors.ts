@@ -9,6 +9,7 @@
 // customer audio or personal names" leaves the building. Records carry incident
 // ids, layers, versions, and access-controlled links.
 
+import { sha256 } from "../domain/ids.ts";
 import type { Incident, RepairArtifact, Verdict } from "../domain/model.ts";
 
 /* ------------------------------------------------------------------ *
@@ -26,6 +27,11 @@ export function redact(text: string, sensitive: readonly string[]): string {
     out = out.split(term).join("«redacted»");
   }
   return out;
+}
+
+/** Sentry event ids must be exactly 32 lowercase hex characters. */
+export function eventIdFor(incidentId: string): string {
+  return sha256(incidentId).slice(0, 32);
 }
 
 /* ------------------------------------------------------------------ *
@@ -64,7 +70,12 @@ export class SentryConnector {
   async openIssue(incident: Incident, sensitive: readonly string[]): Promise<unknown> {
     const { endpoint, publicKey } = parseDsn(this.config.dsn);
     const body = {
-      event_id: incident.incident_id.replace(/-/g, "").padEnd(32, "0").slice(0, 32),
+      // Sentry requires exactly 32 HEX characters. Incident ids are prefixed
+      // ("inc-…") and the prefix is not hex, so the id cannot be reused
+      // directly — the payload is rejected with a 400 before it reaches the
+      // project. Hashing keeps the id stable per incident (so a retry is
+      // deduplicated rather than duplicated) while satisfying the format.
+      event_id: eventIdFor(incident.incident_id),
       timestamp: new Date(incident.opened_at).toISOString(),
       platform: "javascript",
       level: "error",
@@ -101,7 +112,9 @@ export class SentryConnector {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error("sentry store " + res.status);
+    if (!res.ok) {
+      throw new Error("sentry store " + res.status + ": " + (await res.text().catch(() => "")).slice(0, 300));
+    }
     return res.json().catch(() => ({}));
   }
 
@@ -115,7 +128,15 @@ export class SentryConnector {
     return this.mutate(incidentId, "unresolved", reason);
   }
 
-  private async mutate(incidentId: string, status: string, note: string): Promise<unknown> {
+  /**
+   * Resolve an incident id to a Sentry issue id via its tag.
+   *
+   * Returns null when the issue is not searchable yet. Sentry's tag index is
+   * eventually consistent — an event accepted by /store/ took well over ten
+   * seconds to become findable in testing — so "not found" is a retry-later
+   * condition, not a failure.
+   */
+  private async findIssueId(incidentId: string): Promise<string | null> {
     const url =
       this.apiBase +
       "/projects/" +
@@ -126,15 +147,48 @@ export class SentryConnector {
       encodeURIComponent("incident_id:" + incidentId);
 
     const res = await this.fetchImpl(url, {
+      headers: { authorization: "Bearer " + this.config.authToken },
+    });
+    if (!res.ok) {
+      throw new Error("sentry search " + res.status + ": " + (await res.text().catch(() => "")).slice(0, 300));
+    }
+    const issues = (await res.json()) as { id?: string }[];
+    return Array.isArray(issues) && issues[0]?.id ? issues[0].id : null;
+  }
+
+  /**
+   * Update one issue's status.
+   *
+   * Deliberately NOT the bulk endpoint with ?query=. That form returns a 502
+   * gateway error from Sentry ("protocol error") even when the same query works
+   * for a GET; ?id= and the single-issue endpoint both behave. So: search for
+   * the id, then update that issue directly.
+   */
+  private async mutate(incidentId: string, status: string, note: string): Promise<unknown> {
+    // `note` is kept in the signature for the Slack and dashboard trail but is
+    // not sent: the issue-update endpoint defines no such field.
+    void note;
+
+    const issueId = await this.findIssueId(incidentId);
+    if (!issueId) {
+      // Surfacing this as an error hands it back to the retry queue, which is
+      // exactly right — the issue usually appears a few seconds later.
+      throw new Error("sentry issue for " + incidentId + " is not indexed yet; will retry");
+    }
+
+    const res = await this.fetchImpl(this.apiBase + "/issues/" + encodeURIComponent(issueId) + "/", {
       method: "PUT",
       headers: {
         "content-type": "application/json",
         authorization: "Bearer " + this.config.authToken,
       },
-      body: JSON.stringify({ status, statusDetails: {}, note }),
+      body: JSON.stringify({ status }),
     });
-    if (!res.ok) throw new Error("sentry mutate " + res.status);
-    return res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error("sentry mutate " + res.status + ": " + (await res.text().catch(() => "")).slice(0, 300));
+    }
+    const body = (await res.json().catch(() => ({}))) as { permalink?: string };
+    return { issue_id: issueId, status, permalink: body.permalink ?? null };
   }
 }
 
@@ -346,7 +400,9 @@ export class GithubConnector {
         sha,
       }),
     });
-    if (!res.ok) throw new Error("github contents " + res.status);
+    if (!res.ok) {
+      throw new Error("github contents " + res.status + ": " + (await res.text().catch(() => "")).slice(0, 300));
+    }
     return res.json().catch(() => ({}));
   }
 }

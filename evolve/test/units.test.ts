@@ -333,6 +333,87 @@ describe("external app writes", () => {
     expect(results[0]!.attempts).toBe(3);
   });
 
+  it("runs same-stream jobs strictly in order", async () => {
+    // Regression: resolve and reopen raced, and the issue was left in whichever
+    // state finished last. Observed live — a rolled-back repair showed as
+    // resolved in Sentry.
+    const queue = new AppWriteQueue(3, async () => {});
+    const order: string[] = [];
+    const job = (name: string, delay: number) => ({
+      key: "k-" + name,
+      app: "sentry" as const,
+      description: name,
+      stream: "sentry:inc-1",
+      run: async () => {
+        await new Promise((r) => setTimeout(r, delay));
+        order.push(name);
+        return name;
+      },
+    });
+
+    // Enqueued slowest-first: without stream ordering these finish reversed.
+    queue.enqueue(job("open", 30));
+    queue.enqueue(job("resolve", 20));
+    queue.enqueue(job("reopen", 1));
+
+    await queue.drain();
+    expect(order).toEqual(["open", "resolve", "reopen"]);
+  });
+
+  it("still runs different streams concurrently", async () => {
+    const queue = new AppWriteQueue(3, async () => {});
+    const order: string[] = [];
+    const job = (name: string, stream: string, delay: number) => ({
+      key: "k2-" + name,
+      app: "slack" as const,
+      description: name,
+      stream,
+      run: async () => {
+        await new Promise((r) => setTimeout(r, delay));
+        order.push(name);
+      },
+    });
+
+    queue.enqueue(job("slow-a", "s:a", 40));
+    queue.enqueue(job("fast-b", "s:b", 1));
+
+    await queue.drain();
+    // Different incidents must not serialize behind each other.
+    expect(order).toEqual(["fast-b", "slow-a"]);
+  });
+
+  it("a failing job does not stall the rest of its stream", async () => {
+    const queue = new AppWriteQueue(2, async () => {});
+    const order: string[] = [];
+    queue.enqueue({
+      key: "k3-bad",
+      app: "sentry",
+      description: "bad",
+      stream: "s:x",
+      run: async () => {
+        order.push("bad");
+        throw new Error("boom");
+      },
+    });
+    queue.enqueue({
+      key: "k3-good",
+      app: "sentry",
+      description: "good",
+      stream: "s:x",
+      run: async () => {
+        order.push("good");
+      },
+    });
+
+    const results = await queue.drain();
+    // "bad" appears twice: it exhausts its retries first. The stream waits for
+    // it to settle — which is the point, since the next write to the same
+    // record must not overtake it — and then continues rather than stalling.
+    expect(order).toEqual(["bad", "bad", "good"]);
+    expect(results.find((r) => r.description === "bad")!.status).toBe("failed");
+    expect(results.find((r) => r.description === "good")!.status).toBe("ok");
+  });
+
   it("redacts personal names before they reach an external app", () => {
     const out = redact("Ayesha was mispronounced in session s-42", ["Ayesha"]);
     expect(out).not.toContain("Ayesha");

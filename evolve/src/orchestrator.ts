@@ -165,6 +165,7 @@ export class EvolveOrchestrator {
       this.deps.queue.enqueue({
         key: "sentry:open:" + stored.incident_id,
         app: "sentry",
+        stream: "sentry:" + stored.incident_id,
         description: "open issue for " + stored.incident_id,
         run: () => sentry.openIssue(stored, this.sensitiveTerms(stored.tenant)),
       });
@@ -174,6 +175,7 @@ export class EvolveOrchestrator {
       this.deps.queue.enqueue({
         key: "slack:open:" + stored.incident_id,
         app: "slack",
+        stream: "slack:" + stored.incident_id,
         description: "open thread for " + stored.incident_id,
         run: () => slack.openThread(stored, this.sensitiveTerms(stored.tenant)),
       });
@@ -568,6 +570,7 @@ export class EvolveOrchestrator {
       this.deps.queue.enqueue({
         key: "slack:finding:" + incident.incident_id + ":" + f.specialist,
         app: "slack",
+        stream: "slack:" + incident.incident_id,
         description: f.specialist + " finding",
         run: () =>
           slack.postFinding(
@@ -585,6 +588,7 @@ export class EvolveOrchestrator {
     this.deps.queue.enqueue({
       key: "slack:verdict:" + incident.incident_id + ":" + candidate.candidate_id,
       app: "slack",
+      stream: "slack:" + incident.incident_id,
       description: "verdict for " + candidate.candidate_id,
       run: () =>
         slack.postFinding(
@@ -605,6 +609,7 @@ export class EvolveOrchestrator {
     this.deps.queue.enqueue({
       key: "slack:decision:" + incident.incident_id + ":" + incident.status,
       app: "slack",
+      stream: "slack:" + incident.incident_id,
       description: "decision for " + incident.incident_id,
       run: () =>
         slack.postDecision(incident.incident_id, statement, links, this.sensitiveTerms(incident.tenant)),
@@ -644,6 +649,7 @@ export class EvolveOrchestrator {
     this.deps.queue.enqueue({
       key: "sentry:resolve:" + incidentIdValue + ":" + artifact.repair_id,
       app: "sentry",
+      stream: "sentry:" + incidentIdValue,
       description: "resolve " + incidentIdValue,
       run: () =>
         sentry.resolveIssue(
@@ -659,6 +665,7 @@ export class EvolveOrchestrator {
     this.deps.queue.enqueue({
       key: "sentry:reopen:" + artifact.incident_id + ":" + artifact.repair_id,
       app: "sentry",
+      stream: "sentry:" + artifact.incident_id,
       description: "reopen " + artifact.incident_id,
       run: () =>
         sentry.reopenIssue(

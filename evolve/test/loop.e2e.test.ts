@@ -172,11 +172,20 @@ describe("Evolve end-to-end repair loop", () => {
 
     // Sentry saw the resolve transition.
     await world.queue.drain();
-    const resolves = rec
-      .byApp("sentry")
-      .filter((r) => r.method === "PUT" && (r.body as { status?: string }).status === "resolved");
+    const sentry = rec.byApp("sentry");
+
+    // The incident tag is what ties the Sentry issue back to the incident, and
+    // it is carried on the SEARCH, not the update.
+    const search = sentry.find(
+      (r) => r.method === "GET" && r.url.includes(encodeURIComponent("incident_id:" + incident.incident_id)),
+    );
+    expect(search, "should look the issue up by its incident tag").toBeDefined();
+
+    const resolves = sentry.filter(
+      (r) => r.method === "PUT" && (r.body as { status?: string }).status === "resolved",
+    );
     expect(resolves.length).toBe(1);
-    expect(resolves[0]!.url).toContain(encodeURIComponent("incident_id:" + incident.incident_id));
+    expect(resolves[0]!.url).toMatch(/\/issues\/7730203040\/$/);
   });
 
   it("rolls back — to a HIGHER overlay version — when a repaired utterance regresses", async () => {
@@ -218,6 +227,7 @@ describe("Evolve end-to-end repair loop", () => {
       .byApp("sentry")
       .filter((r) => r.method === "PUT" && (r.body as { status?: string }).status === "unresolved");
     expect(reopens.length).toBe(1);
+    expect(reopens[0]!.url).toMatch(/\/issues\/7730203040\/$/);
 
     void repairId;
   });

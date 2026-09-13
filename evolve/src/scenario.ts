@@ -246,6 +246,8 @@ export interface WorldOptions {
   appFetch?: typeof fetch;
   /** Enable connectors even without real credentials (tests supply appFetch). */
   forceApps?: boolean;
+  /** Override the app-write queue, e.g. to control retry backoff. */
+  queue?: AppWriteQueue;
   /**
    * Independent decoder override. Offline there is genuinely no second
    * recognizer, so the default is null and perception abstains — which is the
@@ -315,7 +317,10 @@ export function buildWorld(options: WorldOptions = {}): World {
   const store = new InMemoryStore();
   const overlays = new SessionOverlayRegistry(BASE_VERSION);
   const clock = options.clock ?? (offline ? new FakeClock() : systemClock);
-  const queue = new AppWriteQueue();
+  // Offline runs are tests and the eval suite: their retries must not wait on
+  // real external latency, so the backoff sleep is a no-op there. Live runs
+  // keep the real backoff, which is what Sentry's eventual consistency needs.
+  const queue = options.queue ?? (offline ? new AppWriteQueue(4, async () => {}) : new AppWriteQueue());
   const fixtures = loadFixtures(fixturesPath());
 
   const appFetch = options.appFetch ?? fetch;

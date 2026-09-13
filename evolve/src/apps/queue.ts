@@ -16,6 +16,24 @@ export interface AppJob {
   app: "sentry" | "slack" | "github";
   description: string;
   run: () => Promise<unknown>;
+  /**
+   * Ordering group. Jobs sharing a stream run strictly in enqueue order; jobs
+   * in different streams run concurrently.
+   *
+   * This is not a nicety. Two writes to the SAME record are order-dependent:
+   *
+   *   Sentry — resolve-then-reopen and reopen-then-resolve leave the issue in
+   *   opposite states. Racing them makes the final status depend on which HTTP
+   *   call happens to return first, so a rolled-back repair can be left showing
+   *   as resolved.
+   *
+   *   Slack — replies need the thread_ts that opening the thread returns. If a
+   *   finding wins the race it posts as a top-level message instead of a reply,
+   *   and the incident thread silently comes apart.
+   *
+   * Jobs with no stream keep the old fully-concurrent behaviour.
+   */
+  stream?: string;
 }
 
 export interface JobOutcome {
@@ -32,12 +50,23 @@ export class AppWriteQueue {
   private seen = new Set<string>();
   private pending: Promise<void>[] = [];
   private outcomes: JobOutcome[] = [];
+  /** Tail promise per ordering stream; see AppJob.stream. */
+  private streams = new Map<string, Promise<void>>();
 
   constructor(
-    private readonly maxAttempts = 3,
+    private readonly maxAttempts = 4,
     /** Injected so tests do not actually sleep. */
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise((r) => setTimeout(r, ms)),
+    /**
+     * Base backoff. Retries here wait on EXTERNAL eventual consistency, not on
+     * a flaky socket: a Sentry issue took well over ten seconds to become
+     * searchable after its event was accepted. A few hundred milliseconds of
+     * backoff would exhaust every attempt before the record could possibly
+     * exist, and report a permanent failure for something that simply had not
+     * appeared yet.
+     */
+    private readonly backoffMs = 4000,
   ) {}
 
   /** Fire-and-forget. Never throws into the repair loop. */
@@ -55,6 +84,18 @@ export class AppWriteQueue {
       return;
     }
     this.seen.add(job.key);
+
+    if (job.stream) {
+      // Chain onto this stream's tail so the job starts only after the
+      // previous one in the same stream has settled. The tail never rejects
+      // (execute swallows), so the chain cannot break.
+      const previous = this.streams.get(job.stream) ?? Promise.resolve();
+      const next = previous.then(() => this.execute(job));
+      this.streams.set(job.stream, next);
+      this.pending.push(next);
+      return;
+    }
+
     this.pending.push(this.execute(job));
   }
 
@@ -75,7 +116,7 @@ export class AppWriteQueue {
         return;
       } catch (err) {
         lastError = err;
-        if (attempt < this.maxAttempts) await this.sleep(attempt * 100);
+        if (attempt < this.maxAttempts) await this.sleep(attempt * this.backoffMs);
       }
     }
     this.outcomes.push({

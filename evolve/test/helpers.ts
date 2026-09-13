@@ -69,7 +69,21 @@ export function recordingFetch(
     }
 
     if (kind === "sentry") {
-      return Response.json({ id: "sentry-event-1" });
+      // Model the real two-step shape: /store/ ingests, the project issues
+      // endpoint SEARCHES (array), and /issues/{id}/ updates one issue. A mock
+      // that answered every Sentry call with one object would hide the fact
+      // that the connector has to resolve an id before it can mutate.
+      if (url.includes("/store/")) return Response.json({ id: "sentry-event-1" });
+      if (method === "GET" && url.includes("/issues/")) {
+        return Response.json([{ id: "7730203040", status: "unresolved" }]);
+      }
+      if (method === "PUT") {
+        return Response.json({
+          id: "7730203040",
+          permalink: "https://sentry.io/issues/7730203040/",
+        });
+      }
+      return Response.json({});
     }
 
     if (kind === "github") {
