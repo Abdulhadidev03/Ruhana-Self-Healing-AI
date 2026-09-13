@@ -202,6 +202,21 @@ export interface SlackConfig {
 }
 
 /**
+ * How each agent appears in the thread. Names and faces are presentation only;
+ * what makes the participants distinct is that each one inspected a different
+ * slice of the evidence (see agents/protocol.ts), not that it posts under a
+ * different avatar.
+ */
+export const AGENT_IDENTITY: Record<string, { name: string; emoji: string }> = {
+  perception: { name: "Perception", emoji: ":headphones:" },
+  memory: { name: "Memory", emoji: ":brain:" },
+  speech: { name: "Speech", emoji: ":speaking_head_in_silhouette:" },
+  runtime: { name: "Runtime", emoji: ":gear:" },
+  verifier: { name: "Verifier", emoji: ":test_tube:" },
+  supervisor: { name: "Supervisor", emoji: ":balance_scale:" },
+};
+
+/**
  * Slack is a coordination and audit surface, NOT a reviewer. Plan §11: "no
  * approval reactions or merge buttons sit in the loop." Nothing posted here is
  * ever read back as an authorization — this connector is write-only by design.
@@ -247,6 +262,53 @@ export class SlackConnector {
       text: redact(line, sensitive),
     });
   }
+
+  /**
+   * Post as one named agent, so the thread reads as a conversation between
+   * distinct participants rather than one bot narrating everybody.
+   *
+   * Overriding username and icon needs the chat:write.customize scope. Without
+   * it Slack returns an application error, so this falls back to a plain post
+   * with the speaker's name in bold — the thread still reads correctly, it just
+   * loses the per-agent avatar. Degrading is the right behaviour here: the
+   * content is the substance and the avatar is presentation.
+   */
+  async postAs(
+    incidentId: string,
+    speaker: string,
+    text: string,
+    sensitive: readonly string[],
+  ): Promise<unknown> {
+    const identity = AGENT_IDENTITY[speaker] ?? { name: speaker, emoji: ":robot_face:" };
+    const body = redact(text, sensitive);
+
+    // Start pessimistic. Without chat:write.customize Slack does NOT reject the
+    // call — it returns ok:true and silently drops `username`, so every agent
+    // would appear as the same bot and the thread would read as one voice. An
+    // error-only fallback never fires against that, so the speaker's name goes
+    // into the text until a response proves the override was honoured.
+    const prefixed = this.customizeWorks === true ? body : "*" + identity.name + "* " + identity.emoji + "\n" + body;
+
+    const result = (await this.post("chat.postMessage", {
+      channel: this.config.channelId,
+      thread_ts: this.threads.get(incidentId),
+      text: prefixed,
+      username: identity.name,
+      icon_emoji: identity.emoji,
+    })) as { message?: { username?: string } };
+
+    if (this.customizeWorks === null) {
+      this.customizeWorks = result.message?.username === identity.name;
+    }
+    return result;
+  }
+
+  /**
+   * Whether Slack honours per-agent username overrides on this token.
+   * null until the first post tells us. Exposed for the run summary so a demo
+   * can say "add chat:write.customize" rather than quietly looking wrong.
+   */
+  customizeWorks: boolean | null = null;
 
   async postDecision(
     incidentId: string,

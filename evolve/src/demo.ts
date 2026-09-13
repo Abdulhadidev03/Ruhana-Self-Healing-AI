@@ -11,6 +11,7 @@ import { loadEnv, describeCapabilities } from "./util/env.ts";
 import { verifyArtifact } from "./domain/artifact.ts";
 
 const live = process.argv.includes("--live");
+const NEWLINE = "\n";
 const env = loadEnv();
 
 function h(title: string): void {
@@ -74,6 +75,39 @@ async function main(): Promise<void> {
     console.log("\n  " + f.specialist.toUpperCase() + "  [" + f.layer + "]  confidence " + f.confidence.toFixed(2));
     console.log("    " + f.hypothesis);
     console.log("    disproved by: " + f.disconfirming_condition);
+  }
+
+  /* ---------------------------------------------------------------- */
+  h("2b. The challenge round — specialists read each other (plan §4 step 2).");
+
+  if (outcome.discussion.length === 0) {
+    console.log("  No challenge round ran for this incident.");
+  } else {
+    const face: Record<string, string> = {
+      perception: "PERCEPTION",
+      memory: "MEMORY    ",
+      speech: "SPEECH    ",
+      verifier: "VERIFIER  ",
+      supervisor: "SUPERVISOR",
+    };
+    for (const m of outcome.discussion) {
+      const at = m.to === "all" ? "" : " -> " + m.to;
+      console.log(
+        (NEWLINE + "  " + (face[m.from] ?? m.from) + at + "  [" + m.stance + "]").replace(NEWLINE, NEWLINE),
+      );
+      console.log("    " + m.text);
+      if (m.references.length > 0) console.log("    cites: " + m.references.join(", "));
+    }
+    console.log(
+      NEWLINE +
+        (world.live.llm
+          ? "  (Above are the models' actual replies, generated just now.)"
+          : "  (Above are SCRIPTED stand-ins — this run has no model behind it." +
+            NEWLINE +
+            "   Run with --live for a real exchange.)") +
+        NEWLINE +
+        "  Nothing here reaches the gate: plan §1, agreement is not a release criterion.",
+    );
   }
 
   /* ---------------------------------------------------------------- */
@@ -186,6 +220,15 @@ async function main(): Promise<void> {
     for (const w of writes) {
       console.log("    " + w.status.padEnd(18) + w.app.padEnd(8) + w.description + (w.error ? "  (" + w.error + ")" : ""));
     }
+  }
+
+  const slack = world.apps.slack;
+  if (slack && slack.customizeWorks === false) {
+    console.log("");
+    console.log("  NOTE: Slack dropped the per-agent username override, so every message");
+    console.log("  posted as the same bot with the speaker's name in bold instead. Add the");
+    console.log("  chat:write.customize bot scope and reinstall the app for real per-agent");
+    console.log("  names and avatars in the thread.");
   }
 
   console.log("");

@@ -21,6 +21,7 @@ import {
 } from "./providers/audio-judge.ts";
 import { OpenAILLM, ScriptedLLM, type LLM } from "./providers/llm.ts";
 import { OpenAITranscriber } from "./providers/decoder.ts";
+import { DemoDecoder } from "./providers/demo-decoder.ts";
 import { FakeClock, systemClock, type Clock } from "./providers/clock.ts";
 import {
   MemorySpecialist,
@@ -66,6 +67,22 @@ export const DEFAULT_G2P: Record<string, string> = {
   Aisha: "/ˈaɪʃə/",
   Khadija: "/kəˈdiːdʒə/",
   Asia: "/ˈeɪʒə/",
+};
+
+/**
+ * Scripted second decodes for the synthetic demo mic segments.
+ *
+ * These deliberately AGREE with the primary transcript. That is what plan §12
+ * step 3 needs to show: perception runs a genuine second decode, finds the two
+ * agree, and reports no input-recognition cause — so the incident stays with
+ * speech rather than being blamed on the recognizer.
+ */
+export const SYNTHETIC_DECODES: Record<string, string> = {
+  "memory://mic/t-1": "good morning this is Ayesha",
+  "memory://mic/t-2": "can you update my delivery address",
+  "memory://mic/t-3": "and confirm my appointment please",
+  "memory://mic/t-9": "please confirm with Khadija",
+  "memory://mic/t-10": "how is the Asia team doing",
 };
 
 export function buildRegistry(): InMemoryRegistry {
@@ -148,6 +165,32 @@ export function scriptedLLM(): ScriptedLLM {
           },
         ],
       }),
+    // Offline stand-in for the challenge round. These are FIXED replies, not
+    // reasoning — they exist so the orchestration can be tested without a
+    // network. A live run replaces them with whatever the models actually say,
+    // and the demo banner states which mode produced the transcript.
+    "discussion.challenge": (req) => {
+      const who = /You are the (\w+) specialist/.exec(req.system)?.[1] ?? "speech";
+      const table: Record<string, { to: string; stance: string; text: string }> = {
+        perception: {
+          to: "speech",
+          stance: "agree",
+          text: "Nothing on my side points at recognition — the caller's audio and the transcript agree on the name. If the text was right and the audio was wrong, that lands in your half, not mine.",
+        },
+        memory: {
+          to: "all",
+          stance: "agree",
+          text: "The binding is intact: the response used the registry's canonical spelling. So whatever went wrong happened after the text was chosen.",
+        },
+        speech: {
+          to: "all",
+          stance: "refine",
+          text: "Agreed it is synthesis. Worth being precise though: I can only show the emitted audio diverges from the reference. Two phoneme candidates are rendering now, and if the one matching the reference still scores badly then it is the voice or the renderer, not the phonemes.",
+        },
+      };
+      const pick = table[who] ?? table["speech"]!;
+      return JSON.stringify({ ...pick, references: [] });
+    },
     "supervisor.decide": (req) => {
       // The scripted supervisor picks the first candidate that survived
       // verification, which the orchestrator has already filtered for it.
@@ -306,12 +349,16 @@ export function buildWorld(options: WorldOptions = {}): World {
       ? new OpenAIAudioJudge(openaiKey, env.EVOLVE_JUDGE_MODEL ?? "gpt-audio-1.5")
       : new PhonemeMatchJudge();
 
+  // Real transcriber when a key is present; synthetic demo segments are handled
+  // by DemoDecoder, which delegates anything with a real URL straight to it.
+  const realDecoder =
+    openaiKey && !offline
+      ? new OpenAITranscriber(openaiKey, env.EVOLVE_STT_MODEL ?? "gpt-4o-transcribe")
+      : null;
   const decoder =
     options.decoder !== undefined
       ? options.decoder
-      : openaiKey && !offline
-        ? new OpenAITranscriber(openaiKey, env.EVOLVE_STT_MODEL ?? "gpt-4o-transcribe")
-        : null;
+      : new DemoDecoder(SYNTHETIC_DECODES, realDecoder);
 
   const registry = buildRegistry();
   const store = new InMemoryStore();
@@ -371,6 +418,9 @@ export function buildWorld(options: WorldOptions = {}): World {
     speech: new SpeechSpecialist(specialistLlm, judge),
     verifier: new AdversarialVerifier(registry, renderer, judge, fixtures),
     supervisor: new Supervisor(supervisorLlm),
+    // The challenge round runs on the specialist tier, not the supervisor's
+    // (plan §9: separate budgets; this is three calls per incident).
+    discussionLlm: specialistLlm,
     renderer,
     judge,
     fixtures,

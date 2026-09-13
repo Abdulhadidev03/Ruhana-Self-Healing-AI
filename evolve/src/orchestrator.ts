@@ -33,6 +33,7 @@ import { SessionOverlayRegistry } from "./domain/overlay-store.ts";
 import { MemorySpecialist, PerceptionSpecialist, SpeechSpecialist } from "./agents/specialists.ts";
 import { memoryView, perceptionView, speechView } from "./agents/protocol.ts";
 import { Supervisor } from "./agents/supervisor.ts";
+import { runChallengeRound, type ChallengeMessage } from "./agents/discussion.ts";
 import { AdversarialVerifier, requiredFixtureIds, type FixtureSet } from "./agents/verifier.ts";
 import type { EvolveStore } from "./providers/store.ts";
 import type { CandidateRenderer } from "./providers/renderer.ts";
@@ -56,6 +57,8 @@ export interface OrchestratorDeps {
   speech: SpeechSpecialist;
   verifier: AdversarialVerifier;
   supervisor: Supervisor;
+  /** Model backing the challenge round; the specialists' own tier. */
+  discussionLlm: import("./providers/llm.ts").LLM;
   renderer: CandidateRenderer;
   judge: AudioJudge;
   fixtures: FixtureSet;
@@ -72,6 +75,8 @@ export interface RepairOutcome {
   candidates: Candidate[];
   verdicts: Verdict[];
   decision: SupervisorDecision;
+  /** The challenge round (plan §4 step 2). Audit trail only — never a gate input. */
+  discussion: ChallengeMessage[];
   supervisorOverrode: string | null;
   gate: GateResult | null;
   artifact: RepairArtifact | null;
@@ -230,6 +235,19 @@ export class EvolveOrchestrator {
 
     this.postFindings(incident, findings);
 
+    // --- Step 1b: one challenge round (plan §4 step 2, §9 budget). -------
+    // Specialists have now published independently; this is where they read
+    // each other. Failure here must not take the repair down, so it degrades
+    // to an empty transcript.
+    let discussion: ChallengeMessage[] = [];
+    try {
+      discussion = await runChallengeRound(this.deps.discussionLlm, incident, findings);
+      usage.llmCalls += findings.length;
+    } catch {
+      discussion = [];
+    }
+    this.postDiscussion(incident, discussion);
+
     // --- Step 2: the supervisor commissions bounded experiments. --------
     const commissioned = this.deps.supervisor.commission(findings);
     const candidates = await this.buildCandidates(incident, commissioned, turn, voiceModelVersion, usage);
@@ -260,6 +278,7 @@ export class EvolveOrchestrator {
         candidates,
         verdicts,
         decision,
+        discussion,
         supervisorOverrode: outcome.overrode,
         gate: null,
         artifact: null,
@@ -300,6 +319,7 @@ export class EvolveOrchestrator {
         candidates,
         verdicts,
         decision,
+        discussion,
         supervisorOverrode: outcome.overrode,
         gate,
         artifact: null,
@@ -355,6 +375,7 @@ export class EvolveOrchestrator {
       candidates,
       verdicts,
       decision,
+      discussion,
       supervisorOverrode: outcome.overrode,
       gate,
       artifact,
@@ -567,15 +588,49 @@ export class EvolveOrchestrator {
     const slack = this.deps.apps.slack;
     if (!slack) return;
     for (const f of findings) {
+      // The specialist's own hypothesis, verbatim. Not a templated summary of
+      // it — plan §4 forbids narrating reasoning we did not observe.
+      const body =
+        f.hypothesis +
+        "\n_Would change my mind:_ " +
+        f.disconfirming_condition;
       this.deps.queue.enqueue({
         key: "slack:finding:" + incident.incident_id + ":" + f.specialist,
         app: "slack",
         stream: "slack:" + incident.incident_id,
         description: f.specialist + " finding",
         run: () =>
-          slack.postFinding(
+          slack.postAs(incident.incident_id, f.specialist, body, this.sensitiveTerms(incident.tenant)),
+      });
+    }
+  }
+
+  /**
+   * Post the challenge round, in order, each agent under its own name.
+   *
+   * Ordering matters for readability: a reply that lands before the message it
+   * answers reads as nonsense. They share the incident's Slack stream, so they
+   * are serialised with everything else in the thread.
+   */
+  private postDiscussion(incident: Incident, messages: ChallengeMessage[]): void {
+    const slack = this.deps.apps.slack;
+    if (!slack || messages.length === 0) return;
+
+    for (const [index, m] of messages.entries()) {
+      const addressed = m.to !== "all" ? "→ *" + m.to + "*  " : "";
+      const stance =
+        m.stance === "challenge" ? " :warning:" : m.stance === "refine" ? " :pencil2:" : "";
+      const cites = m.references.length > 0 ? "\n_cites:_ `" + m.references.join("`, `") + "`" : "";
+      this.deps.queue.enqueue({
+        key: "slack:discussion:" + incident.incident_id + ":" + m.from + ":" + index,
+        app: "slack",
+        stream: "slack:" + incident.incident_id,
+        description: m.from + " challenge turn",
+        run: () =>
+          slack.postAs(
             incident.incident_id,
-            "*" + f.specialist + "* (" + f.layer + "): " + f.hypothesis,
+            m.from,
+            addressed + m.text + stance + cites,
             this.sensitiveTerms(incident.tenant),
           ),
       });
@@ -590,16 +645,33 @@ export class EvolveOrchestrator {
       app: "slack",
       stream: "slack:" + incident.incident_id,
       description: "verdict for " + candidate.candidate_id,
-      run: () =>
-        slack.postFinding(
+      run: () => {
+        const failed = verdict.fixture_results.filter((f) => !f.passed);
+        const head = verdict.refuted
+          ? "I tried to break `" + candidate.candidate_id + "` and succeeded."
+          : "I tried to break `" + candidate.candidate_id + "` and could not.";
+        const detail = verdict.refuted
+          ? " It fails " +
+            failed.length +
+            " of " +
+            verdict.fixture_results.length +
+            " protected fixtures — " +
+            failed.map((f) => f.fixture_id).join(", ") +
+            ".\n" +
+            (failed[0]?.detail ?? "")
+          : " All " +
+            verdict.fixture_results.length +
+            " protected fixtures pass, including the negative controls." +
+            (verdict.acoustic
+              ? " Acoustic score " + verdict.acoustic.match_score.toFixed(2) + " on the reproducer."
+              : "");
+        return slack.postAs(
           incident.incident_id,
-          "*verifier* on `" +
-            candidate.candidate_id +
-            "`: " +
-            (verdict.refuted ? ":x: refuted — " : ":heavy_check_mark: survived — ") +
-            verdict.reason,
+          "verifier",
+          head + detail,
           this.sensitiveTerms(incident.tenant),
-        ),
+        );
+      },
     });
   }
 
@@ -611,8 +683,17 @@ export class EvolveOrchestrator {
       app: "slack",
       stream: "slack:" + incident.incident_id,
       description: "decision for " + incident.incident_id,
-      run: () =>
-        slack.postDecision(incident.incident_id, statement, links, this.sensitiveTerms(incident.tenant)),
+      run: () => {
+        const linkLines = Object.entries(links)
+          .map(([k, v]) => "• " + k + ": `" + v + "`")
+          .join("\n");
+        return slack.postAs(
+          incident.incident_id,
+          "supervisor",
+          statement + (linkLines ? "\n" + linkLines : ""),
+          this.sensitiveTerms(incident.tenant),
+        );
+      },
     });
   }
 
@@ -688,6 +769,7 @@ export class EvolveOrchestrator {
       findings: [],
       candidates: [],
       verdicts: [],
+      discussion: [],
       decision: {
         action: "request_more_evidence",
         chosen_candidate_id: null,
