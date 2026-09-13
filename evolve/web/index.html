@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ruhana Self-Healing — Evolve</title>
+<style>
+  :root {
+    --bg: #000; --panel: #101216; --panel2: #15181e; --line: #232832;
+    --text: #e6e9ef; --dim: #8b93a3; --dimmer: #5b6272;
+    --ok: #22c55e; --bad: #ef4444; --warn: #b45309; --info: #3b82f6; --accent: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family: system-ui, sans-serif; font-size:14px; line-height:1.5; }
+  a { color: var(--info); }
+  header { padding:14px 20px; background:var(--panel); border-bottom:1px solid var(--line);
+           display:flex; gap:16px; align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:10; }
+  h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.2px; }
+  .sub { color:var(--dim); font-size:12px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .chip { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--line);
+          background:var(--panel2); color:var(--dim); white-space:nowrap; }
+  .chip.live { color:var(--ok); border-color:#14532d; }
+  .chip.stub { color:var(--warn); border-color:#4a2f08; }
+  .bar { padding:10px 20px; background:var(--panel2); border-bottom:1px solid var(--line);
+         display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  button { background:#1f2937; color:var(--text); border:1px solid var(--line);
+           padding:6px 12px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit; }
+  button:hover:not(:disabled) { background:#2b3543; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:#1e3a8a; border-color:#1e40af; }
+  button.danger { background:#7f1d1d; border-color:#991b1b; }
+  .status { color:var(--dim); font-size:12px; margin-left:auto; }
+  main { display:grid; grid-template-columns: 300px 1fr; gap:0; align-items:start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  aside { border-right:1px solid var(--line); min-height:calc(100vh - 100px); }
+  .inc { padding:12px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .inc:hover { background:var(--panel); }
+  .inc.sel { background:var(--panel); border-left:3px solid var(--accent); padding-left:13px; }
+  .inc .id { font-family:ui-monospace,monospace; font-size:11px; color:var(--dim); }
+  .inc .layer { font-weight:600; text-transform:capitalize; }
+  section { padding:18px 22px; border-bottom:1px solid var(--line); }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.9px; color:var(--dim);
+       margin:0 0 12px; font-weight:600; }
+  .kv { display:grid; grid-template-columns:190px 1fr; gap:6px 14px; font-size:13px; }
+  .kv dt { color:var(--dim); }
+  .kv dd { margin:0; font-family:ui-monospace,monospace; font-size:12px; word-break:break-all; }
+  .msg { display:flex; gap:11px; padding:11px 0; border-bottom:1px solid #1a1d23; }
+  .msg:last-child { border-bottom:0; }
+  .face { font-size:20px; width:30px; text-align:center; flex:none; line-height:1.2; }
+  .who { font-weight:600; font-size:13px; }
+  .tag { font-size:10px; padding:1px 7px; border-radius:999px; margin-left:7px;
+         background:#1f2937; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
+  .tag.challenge { background:#4a2f08; color:#fbbf24; }
+  .tag.refine { background:#1e3a5f; color:#7dd3fc; }
+  .tag.agree { background:#14532d; color:#86efac; }
+  .body { font-size:13px; color:#cbd2dd; }
+  .cites { font-size:11px; color:var(--dimmer); font-family:ui-monospace,monospace; margin-top:3px; }
+  .cand { border:1px solid var(--line); border-radius:8px; padding:13px; margin-bottom:11px; background:var(--panel); }
+  .cand.win { border-color:#14532d; }
+  .cand.lose { border-color:#5b1d1d; }
+  .mono { font-family:ui-monospace,monospace; font-size:12px; }
+  .fx { display:flex; gap:9px; align-items:baseline; padding:3px 0; font-size:12px; }
+  .pill { font-size:10px; padding:1px 6px; border-radius:4px; font-weight:600; flex:none; }
+  .pill.p { background:#14532d; color:#86efac; } .pill.f { background:#5b1d1d; color:#fca5a5; }
+  .nc { font-size:10px; color:var(--accent); flex:none; }
+  .fxd { color:var(--dim); }
+  .cond { display:flex; gap:9px; padding:5px 0; font-size:12.5px; align-items:baseline; }
+  .cond .n { color:var(--dim); flex:none; width:92px; font-family:ui-monospace,monospace; }
+  .cond .d { color:var(--dim); }
+  .empty { color:var(--dimmer); font-size:13px; font-style:italic; }
+  .note { background:#1a1408; border:1px solid #4a2f08; color:#fbbf24;
+          padding:9px 12px; border-radius:6px; font-size:12px; margin-top:12px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { text-align:left; color:var(--dim); font-weight:500; padding:5px 10px 5px 0; font-weight:600; }
+  td { padding:4px 10px 4px 0; border-top:1px solid #1a1d23; }
+  .s-ok { color:var(--ok); } .s-bad { color:var(--bad); } .s-dup { color:var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Ruhana Self-Healing — Evolve</h1>
+    <div class="sub">evidence in → diagnosis → verified repair out</div>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div class="bar">
+  <button class="primary" id="b-seed">1 · Seed the failing turn</button>
+  <button id="b-fresh">2 · Speak a new sentence</button>
+  <button class="danger" id="b-regress">3 · Force a regression</button>
+  <span class="status" id="status">idle</span>
+</div>
+
+<main>
+  <aside id="list"></aside>
+  <div id="detail"><section><div class="empty">No incident selected.</div></section></div>
+</main>
+
+<script>
+const FACE = { perception:"🎧", memory:"🧠", speech:"🗣️", runtime:"⚙️", verifier:"🧪", supervisor:"🎩" };
+const NAME = { perception:"Agent Percept", memory:"Agent Mem", speech:"Agent Spec",
+               runtime:"Agent Runtime", verifier:"Agent Veri", supervisor:"Agent Frank the Boss" };
+let selected = null, busy = false;
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const setStatus = (t) => { document.getElementById("status").textContent = t; };
+
+async function post(path) {
+  if (busy) return;
+  busy = true; document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  setStatus("working…");
+  try {
+    const r = await fetch(path, { method: "POST" });
+    const b = await r.json();
+    setStatus(b.error ? "error: " + b.error : (b.message || "done"));
+  } catch (e) { setStatus("error: " + e.message); }
+  busy = false; document.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  refresh(true);
+}
+
+document.getElementById("b-seed").onclick = () => post("/api/demo/seed");
+document.getElementById("b-fresh").onclick = () => post("/api/demo/fresh");
+document.getElementById("b-regress").onclick = () => post("/api/demo/regress");
+
+function chips(p) {
+  const row = (label, live, detail) =>
+    `<span class="chip ${live ? "live" : "stub"}" title="${esc(detail)}">${live ? "●" : "○"} ${esc(label)}</span>`;
+  return [
+    row("models: " + p.llm, p.live.llm, p.live.llm ? "real model" : "deterministic stand-in"),
+    row("judge: " + p.judge, p.live.judge, p.live.judge ? "real acoustic judging" : "phoneme-string comparison, NOT audio analysis"),
+    row("renderer: " + p.renderer, p.live.renderer, p.live.renderer ? "real audio" : "simulated grapheme-to-phoneme"),
+  ].join("");
+}
+
+function conversation(inc) {
+  const turns = [];
+  for (const f of inc.findings ?? []) {
+    turns.push({ from: f.specialist, stance: f.layer, text: f.hypothesis,
+                 extra: "Would change my mind: " + f.disconfirming_condition, cites: f.evidence_refs });
+  }
+  for (const m of inc.discussion ?? []) {
+    turns.push({ from: m.from, stance: m.stance, text: m.text,
+                 to: m.to !== "all" ? m.to : null, cites: m.references });
+  }
+  for (const v of inc.verdicts ?? []) {
+    const failed = (v.fixture_results ?? []).filter((f) => !f.passed);
+    turns.push({ from: "verifier", stance: v.refuted ? "challenge" : "agree",
+      text: (v.refuted ? "I tried to break " + v.candidate_id + " and succeeded. "
+                       : "I tried to break " + v.candidate_id + " and could not. ") + v.reason,
+      extra: failed.length ? failed[0].detail : null });
+  }
+  if (inc.decision) {
+    turns.push({ from: "supervisor", stance: inc.decision.action, text: inc.decision.rationale,
+      extra: inc.supervisor_overrode ? "OVERRIDDEN BY CODE: " + inc.supervisor_overrode : null });
+  }
+  if (!turns.length) return '<div class="empty">No exchange recorded yet.</div>';
+
+  return turns.map((t) => `
+    <div class="msg">
+      <div class="face">${FACE[t.from] ?? "🤖"}</div>
+      <div>
+        <div class="who">${esc(NAME[t.from] ?? t.from)}
+          ${t.to ? '<span class="tag">→ ' + esc(NAME[t.to] ?? t.to) + "</span>" : ""}
+          <span class="tag ${esc(t.stance)}">${esc(t.stance)}</span></div>
+        <div class="body">${esc(t.text)}</div>
+        ${t.extra ? '<div class="cites">' + esc(t.extra) + "</div>" : ""}
+        ${t.cites && t.cites.length ? '<div class="cites">cites: ' + esc(t.cites.join(", ")) + "</div>" : ""}
+      </div>
+    </div>`).join("");
+}
+
+function candidates(inc) {
+  if (!(inc.candidates ?? []).length) return '<div class="empty">No candidates generated.</div>';
+  return inc.candidates.map((c) => {
+    const v = (inc.verdicts ?? []).find((x) => x.candidate_id === c.candidate_id);
+    const won = inc.decision && inc.decision.chosen_candidate_id === c.candidate_id;
+    const fx = (v?.fixture_results ?? []).map((f) => `
+      <div class="fx"><span class="pill ${f.passed ? "p" : "f"}">${f.passed ? "PASS" : "FAIL"}</span>
+        <span class="mono">${esc(f.fixture_id)}</span>
+        ${f.negative_control ? '<span class="nc">negative control</span>' : ""}
+        <span class="fxd">${esc(f.detail)}</span></div>`).join("");
+    return `<div class="cand ${won ? "win" : v?.refuted ? "lose" : ""}">
+      <div class="mono"><b>${esc(c.candidate_id)}</b> ${esc(JSON.stringify(c.payload))}
+        ${won ? '<span class="tag agree">released</span>' : v?.refuted ? '<span class="tag challenge">refuted</span>' : ""}</div>
+      <div class="body" style="margin:6px 0">${esc(c.rationale)}</div>
+      ${v?.acoustic ? '<div class="cites">acoustic ' + v.acoustic.match_score.toFixed(2) + " (" + esc(v.acoustic.judge_model) + ")</div>" : ""}
+      ${fx}</div>`;
+  }).join("");
+}
+
+function gate(inc) {
+  if (!inc.gate) return '<div class="empty">Gate not reached — the supervisor did not request a release.</div>';
+  const rows = inc.gate.conditions.map((c) => `
+    <div class="cond"><span class="pill ${c.passed ? "p" : "f"}">${c.passed ? "PASS" : "FAIL"}</span>
+      <span class="n">condition ${c.id}</span><span>${esc(c.name)} — <span class="d">${esc(c.detail)}</span></span></div>`).join("");
+  return rows + `<div style="margin-top:10px" class="mono">
+    gate: <b class="${inc.gate.released ? "s-ok" : "s-bad"}">${inc.gate.released ? "RELEASED" : "BLOCKED"}</b>
+    ${inc.gate.blockedBy ? " — " + esc(inc.gate.blockedBy) : ""}</div>`;
+}
+
+function detail(inc, data) {
+  const a = inc.artifact;
+  const writes = (data.app_writes ?? []).filter((w) => w.key.includes(inc.incident_id));
+  return `
+  <section>
+    <h2>Incident</h2>
+    <dl class="kv">
+      <dt>id</dt><dd>${esc(inc.incident_id)}</dd>
+      <dt>diagnosed layer</dt><dd>${esc(inc.layer)}</dd>
+      <dt>status</dt><dd>${esc(inc.status)}${inc.running ? " (repairing…)" : ""}</dd>
+      <dt>entity</dt><dd>${esc(inc.entity_id ?? "—")}</dd>
+      <dt>observed version</dt><dd>${esc(inc.observed_version)}</dd>
+      <dt>seeded fault</dt><dd>${esc(inc.injected_fault ?? "none — organic")}</dd>
+      <dt>detection → activation</dt><dd>${inc.detection_to_activation_ms ?? "—"} ms</dd>
+      <dt>cost</dt><dd>${inc.usage ? inc.usage.llmCalls + " model calls, " + inc.usage.renders + " renders, " + inc.usage.judgements + " judgements" : "—"}</dd>
+    </dl>
+    <div class="body" style="margin-top:10px;color:var(--dim)">${esc(inc.summary)}</div>
+  </section>
+
+  <section><h2>The agents</h2>${conversation(inc)}
+    <div class="note">Nothing in this exchange reaches the gate. Plan §1: agreement is not a release criterion.</div>
+  </section>
+
+  <section><h2>Candidates, measured</h2>${candidates(inc)}</section>
+  <section><h2>Machine release gate — six deterministic conditions</h2>${gate(inc)}</section>
+
+  <section><h2>Active repair</h2>${a ? `<dl class="kv">
+      <dt>repair id</dt><dd>${esc(a.repair_id)}</dd>
+      <dt>artifact hash</dt><dd>${esc(a.artifact_hash)}</dd>
+      <dt>issuer</dt><dd>${esc(a.issuer)}</dd>
+      <dt>overlay version</dt><dd>${esc(a.base_version)}+overlay.${a.overlay_version}</dd>
+      <dt>scope</dt><dd>${esc(JSON.stringify(a.repair.scope))}</dd>
+      <dt>expires</dt><dd>${esc(a.repair.expires)}</dd>
+      <dt>status</dt><dd>${esc(a.status)}</dd></dl>`
+    : '<div class="empty">No repair released for this incident.</div>'}
+  </section>
+
+  <section><h2>External records</h2>${writes.length ? `<table>
+      <tr><th>app</th><th>action</th><th>result</th><th>attempts</th></tr>
+      ${writes.map((w) => `<tr><td>${esc(w.app)}</td><td>${esc(w.description)}</td>
+        <td class="${w.status === "ok" ? "s-ok" : w.status === "failed" ? "s-bad" : "s-dup"}">${esc(w.status)}${w.error ? " — " + esc(w.error) : ""}</td>
+        <td>${w.attempts}</td></tr>`).join("")}</table>`
+    : '<div class="empty">No external records — configure SENTRY_*, SLACK_* and GITHUB_* to write them.</div>'}
+  </section>`;
+}
+
+let lastPayload = "", lastSelected = null;
+
+async function refresh(force) {
+  let data, raw;
+  try { raw = await (await fetch("/api/dashboard")).text(); data = JSON.parse(raw); }
+  catch { setStatus("service unreachable"); return; }
+
+  // Re-render ONLY when something actually changed. Replacing innerHTML on a
+  // timer makes the page flicker and throws away your scroll position and any
+  // text you were selecting — unusable while reading a long agent exchange.
+  if (!force && raw === lastPayload && selected === lastSelected) return;
+  lastPayload = raw; lastSelected = selected;
+
+  document.getElementById("chips").innerHTML = chips(data.providers);
+
+  const list = document.getElementById("list");
+  list.innerHTML = data.incidents.length
+    ? data.incidents.map((i) => `<div class="inc ${i.incident_id === selected ? "sel" : ""}" data-id="${esc(i.incident_id)}">
+        <div class="layer">${esc(i.layer)}</div>
+        <div class="id">${esc(i.incident_id)}</div>
+        <div class="sub">${esc(i.status)}${i.running ? " · repairing…" : ""}</div></div>`).join("")
+    : '<div class="inc"><div class="empty">No incidents yet. Click “Seed the failing turn”.</div></div>';
+
+  list.querySelectorAll(".inc[data-id]").forEach((el) => {
+    el.onclick = () => { selected = el.dataset.id; refresh(true); };
+  });
+
+  if (!selected && data.incidents.length) {
+    selected = data.incidents[data.incidents.length - 1].incident_id;
+    lastSelected = selected;
+  }
+  const inc = data.incidents.find((i) => i.incident_id === selected);
+  document.getElementById("detail").innerHTML = inc
+    ? detail(inc, data)
+    : '<section><div class="empty">No incident selected.</div></section>';
+}
+
+refresh(true);
+setInterval(() => refresh(false), 2000);
+</script>
+</body>
+</html>

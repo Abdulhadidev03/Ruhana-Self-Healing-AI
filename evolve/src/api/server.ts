@@ -15,8 +15,10 @@
 // multi-agent round trip.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { EvidenceTurn } from "../../../contracts/types.ts";
-import { buildWorld, type World } from "../scenario.ts";
+import { buildWorld, makeTurn, AYESHA, SESSION, TENANT, type World } from "../scenario.ts";
 import { describeCapabilities, loadEnv } from "../util/env.ts";
 import type { Incident } from "../domain/model.ts";
 
@@ -61,6 +63,8 @@ function readBody(req: IncomingMessage): Promise<string> {
 export function createEvolveServer(world: World) {
   /** Incidents whose repair loop is already running, so a retry cannot double-run it. */
   const running = new Set<string>();
+  /** Last completed outcome per incident, for the dashboard. */
+  const outcomes = new Map<string, import("../orchestrator.ts").RepairOutcome>();
 
   async function repairInBackground(incidents: Incident[]): Promise<void> {
     for (const incident of incidents) {
@@ -68,6 +72,7 @@ export function createEvolveServer(world: World) {
       running.add(incident.incident_id);
       try {
         const outcome = await world.orchestrator.runRepairLoop(incident);
+        outcomes.set(incident.incident_id, outcome);
         console.log(
           "[evolve] " +
             incident.incident_id +
@@ -119,16 +124,113 @@ export function createEvolveServer(world: World) {
           return json(res, 200, world.overlays.serve(decodeURIComponent(repairsMatch[1]!)));
         }
 
+
+        /* ---- Dashboard page ---------------------------------------- */
+        if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+          // Read per request rather than caching: during a demo you want an
+          // edit to show up on refresh, not after a restart.
+          const html = readFileSync(join(process.cwd(), "evolve", "web", "index.html"), "utf8");
+          res.writeHead(200, {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+          });
+          res.end(html);
+          return;
+        }
+
+        /* ---- Browser-driven demo (plan §12) ------------------------ */
+        // These post the SAME evidence Part A's runtime would post. They are a
+        // convenience for driving the loop from a browser, not a separate code
+        // path: everything downstream is the real ingest.
+        if (req.method === "POST" && url.pathname.startsWith("/api/demo/")) {
+          const step = url.pathname.slice("/api/demo/".length);
+          const overlay = world.overlays.overlayVersion(SESSION);
+          const active = world.overlays.serve(SESSION).repairs[0];
+          const phonemes = (active?.payload as { phonemes?: string } | undefined)?.phonemes;
+
+          let turn;
+          if (step === "seed") {
+            turn = makeTurn({
+              turnId: "t-1",
+              intendedText: "Good morning Ayesha, your order is ready.",
+              entities: [{ entity_id: AYESHA.entity_id, surface: AYESHA.canonical_text }],
+              applied: {},
+              transcript: "good morning this is Ayesha",
+              injectedFault: "seeded-pronunciation-drop",
+            });
+          } else if (step === "fresh") {
+            if (!phonemes) {
+              return json(res, 409, { error: "no repair is active yet — seed the failing turn first" });
+            }
+            turn = makeTurn({
+              turnId: "t-2",
+              intendedText: "Ayesha, I have updated your delivery address.",
+              entities: [{ entity_id: AYESHA.entity_id, surface: AYESHA.canonical_text }],
+              applied: { [AYESHA.entity_id]: phonemes },
+              overlayVersion: overlay,
+            });
+          } else if (step === "regress") {
+            if (!phonemes) {
+              return json(res, 409, { error: "no repair is active to regress — seed first" });
+            }
+            turn = makeTurn({
+              turnId: "t-3",
+              intendedText: "Ayesha, your appointment is confirmed.",
+              entities: [{ entity_id: AYESHA.entity_id, surface: AYESHA.canonical_text }],
+              applied: { [AYESHA.entity_id]: "/regressed-voice-model/" },
+              overlayVersion: overlay,
+            });
+          } else {
+            return json(res, 404, { error: "unknown demo step: " + step });
+          }
+
+          const result = await world.orchestrator.ingest(turn);
+          if (result.incidents.length > 0) void repairInBackground(result.incidents);
+
+          return json(res, 200, {
+            message:
+              step === "seed"
+                ? result.duplicate
+                  ? "already seeded — reset the service to run it again"
+                  : "incident opened; agents are diagnosing"
+                : step === "fresh"
+                  ? result.observations[0]?.verified
+                    ? "fresh utterance verified against the reference"
+                    : "fresh utterance did NOT verify: " + (result.observations[0]?.detail ?? "no observation")
+                  : result.observations[0]?.rolledBack
+                    ? "regression detected — repair rolled back, entity quarantined"
+                    : "no rollback: " + (result.observations[0]?.detail ?? "no observation"),
+            incidents: result.incidents.map((i) => i.incident_id),
+            observations: result.observations,
+            tenant: TENANT,
+          });
+        }
         /* ---- Evolve's own dashboard surface ----------------------- */
         if (req.method === "GET" && url.pathname === "/api/dashboard") {
           const incidents = world.store.listIncidents();
           return json(res, 200, {
-            incidents: incidents.map((i) => ({
-              ...i,
-              artifact: i.released_repair_id
-                ? world.store.getArtifact(i.released_repair_id)
-                : null,
-            })),
+            incidents: incidents.map((i) => {
+              const outcome = outcomes.get(i.incident_id);
+              return {
+                ...i,
+                artifact: i.released_repair_id
+                  ? world.store.getArtifact(i.released_repair_id)
+                  : null,
+                // The reasoning, not just the verdict. Plan §12's dashboard
+                // priorities: diagnosed layer, candidate results, active
+                // version, and the concise specialist exchange.
+                findings: outcome?.findings ?? [],
+                discussion: outcome?.discussion ?? [],
+                candidates: outcome?.candidates ?? [],
+                verdicts: outcome?.verdicts ?? [],
+                gate: outcome?.gate ?? null,
+                decision: outcome?.decision ?? null,
+                supervisor_overrode: outcome?.supervisorOverrode ?? null,
+                detection_to_activation_ms: outcome?.detectionToActivationMs ?? null,
+                usage: outcome?.usage ?? null,
+                running: running.has(i.incident_id),
+              };
+            }),
             artifacts: world.store.listArtifacts(),
             active_sessions: world.overlays.activeSessions().map((s) => world.overlays.serve(s)),
             app_writes: world.queue.results(),

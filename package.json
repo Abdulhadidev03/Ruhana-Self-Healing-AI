@@ -8,11 +8,11 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "mock:evolve": "node --experimental-strip-types contracts/mocks/evolve-mock-server.ts",
-    "evolve:serve": "tsx evolve/src/api/server.ts",
+    "evolve:serve": "tsx --env-file=.env evolve/src/api/server.ts",
     "evolve:demo": "tsx evolve/src/demo.ts",
     "evolve:eval": "tsx evolve/src/eval/run.ts",
     "evolve:check": "tsx evolve/src/check-apps.ts",
-    "web": "tsx runtime/web/server.ts"
+    "web": "tsx --env-file=.env runtime/web/server.ts"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

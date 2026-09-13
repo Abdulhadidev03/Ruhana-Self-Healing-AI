@@ -2,45 +2,114 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Ruhana Evolve — live demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#f4f6f8" />
+<title>Ruhana AI — Avatar studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;450;500;550;600;650;700&display=swap" rel="stylesheet" />
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; background: #101216; color: #e8e8e8; }
-  h1 { font-size: 1.3rem; font-weight: 600; }
-  video { width: 320px; height: 320px; background: #000; border-radius: 12px; }
-  .row { display: flex; gap: 1.5rem; align-items: flex-start; }
-  .panel { flex: 1; }
-  button { background: #3b82f6; color: white; border: 0; border-radius: 8px; padding: 0.5rem 1rem; margin: 0.25rem 0.25rem 0.25rem 0; cursor: pointer; }
-  button.warn { background: #b45309; }
-  input[type=text] { width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid #333; background: #1a1d23; color: #eee; }
-  pre { background: #1a1d23; border-radius: 8px; padding: 0.75rem; font-size: 0.78rem; overflow-x: auto; white-space: pre-wrap; }
-  .tag { display: inline-block; background: #1f2937; border-radius: 6px; padding: 0.1rem 0.5rem; margin-right: 0.4rem; font-size: 0.8rem; }
+  :root { color-scheme: light; --canvas: #f4f6f8; --chrome: #fdfdfd; --ink: #16181b; --muted: #62666d; --line: #e3e6e9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; }
+  .header { height: 80px; padding: 0 5%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--chrome); }
+  .brand { font-size: 23px; font-weight: 650; letter-spacing: -1px; }
+  .brand span { font-weight: 450; color: var(--muted); }
+  .header-label { padding-left: 22px; margin-left: 22px; border-left: 1px solid var(--line); font-size: 13px; color: var(--muted); letter-spacing: 0; font-weight: 450; }
+  .header-right { font-size: 12px; color: var(--muted); }
+  main { max-width: 1120px; margin: 0 auto; padding: 43px 28px 24px; }
+  .intro { margin-bottom: 28px; }
+  .eyebrow { font-size: 10px; font-weight: 650; letter-spacing: 1.7px; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(30px, 3.8vw, 43px); font-weight: 550; letter-spacing: -1.9px; line-height: 1.12; margin: 12px 0; }
+  .intro p { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.7; }
+  .workspace { display: grid; grid-template-columns: 0.95fr 1fr; gap: 24px; align-items: stretch; }
+  .avatar-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 10px; display: flex; flex-direction: column; }
+  .stage { position: relative; background: #111214; border-radius: 10px; overflow: hidden; min-height: 350px; flex: 1; }
+  video { display: block; width: 100%; height: 100%; min-height: 350px; max-height: 420px; object-fit: contain; background: #111214; }
+  .stage-caption { position: absolute; top: 19px; left: 20px; color: #ddd; font-size: 10px; letter-spacing: 1.6px; z-index: 1; pointer-events: none; }
+  .avatar-footer { padding: 17px 10px 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .avatar-name { font-size: 14px; font-weight: 600; }
+  .avatar-meta { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
+  button { background: var(--ink); color: white; border: 1px solid var(--ink); border-radius: 9px; padding: 12px 17px; font-size: 12px; font-weight: 550; cursor: pointer; transition: background .15s, transform .15s; }
+  button:hover { background: #33363a; }
+  button:active { transform: translateY(1px); }
+  button:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid #4c5a70; outline-offset: 3px; }
+  .panel { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 26px; min-width: 0; }
+  .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 25px; }
+  h2 { font-size: 17px; font-weight: 550; letter-spacing: -.4px; margin: 0; }
+  #status { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 20px; padding: 6px 10px; text-align: right; max-width: 60%; }
+  label { display: block; font-size: 12px; font-weight: 550; margin-bottom: 10px; }
+  input[type=text] { width: 100%; padding: 15px 13px; border-radius: 9px; border: 1px solid #858f9a; background: #fafbfc; color: var(--ink); font-size: 13px; }
+  .hint { color: var(--muted); font-size: 11px; line-height: 1.7; margin: 10px 0 17px; }
+  #speak { width: 100%; padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .repair { border-top: 1px solid var(--line); margin-top: 26px; padding-top: 23px; }
+  .repair-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  h3 { font-size: 12px; margin: 0; font-weight: 600; }
+  .tag { font-size: 10px; color: var(--muted); padding: 5px 8px; background: #f4f6f8; border-radius: 5px; overflow-wrap: anywhere; }
+  .repair p { font-size: 12px; line-height: 1.7; color: var(--muted); margin: 10px 0 14px; }
+  .actions { display: flex; gap: 8px; }
+  .secondary { background: #fff; color: var(--ink); border-color: #d7dce1; }
+  .secondary:hover { background: #f4f6f8; }
+  .quiet { background: #f4f6f8; color: var(--muted); border-color: transparent; }
+  .quiet:hover { background: #e9ecef; }
+  details { border-top: 1px solid var(--line); margin-top: 23px; padding-top: 16px; }
+  summary { cursor: pointer; font-size: 11px; color: var(--muted); }
+  pre { background: #f6f7f8; border-radius: 8px; padding: 13px; font: 11px/1.7 ui-monospace, monospace; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; margin-bottom: 0; }
+  .footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 20px; font-size: 10px; color: var(--muted); }
+  .footer .tag { background: transparent; padding: 0; }
+  @media (max-width: 720px) { .header { height: 68px; padding: 0 22px; } .header-label { display: none; } main { padding: 30px 18px 22px; } .workspace { grid-template-columns: 1fr; gap: 16px; } .panel { padding: 22px; } .stage, video { min-height: 320px; height: 360px; } .footer { flex-wrap: wrap; } }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
 </style>
 </head>
 <body>
-<h1>Ruhana Evolve — self-healing voice demo</h1>
-<div class="row">
-  <div>
-    <video id="avatar" autoplay playsinline></video>
-    <div>
+<header class="header">
+  <div class="brand">Ruhana <span>AI</span><span class="header-label">Avatar studio</span></div>
+  <span class="header-right">Evolve / Interactive demo</span>
+</header>
+<main>
+  <div class="intro">
+    <span class="eyebrow">The human side of AI</span>
+    <h1>A better voice. Every turn.</h1>
+    <p>Meet your avatar. Hear the difference as Ruhana Evolve repairs its pronunciation.</p>
+  </div>
+  <div class="workspace">
+  <section class="avatar-card" aria-label="Avatar preview">
+    <div class="stage">
+      <span class="stage-caption">RUHANA / AVATAR</span>
+      <video id="avatar" autoplay playsinline aria-label="Ruhana avatar video"></video>
+    </div>
+    <div class="avatar-footer">
+      <div class="avatar-name">Your Ruhana agent<span class="avatar-meta">Voice &amp; video experience</span></div>
       <button id="start">Start avatar session</button>
     </div>
-  </div>
-  <div class="panel">
-    <p>
-      <span class="tag" id="version">version: —</span>
-      <span class="tag" id="fault">fault: off</span>
-      <span class="tag" id="status">idle</span>
-    </p>
-    <input id="text" type="text" value="Good morning Ayesha, your order is ready." />
-    <div>
-      <button id="speak">Speak</button>
-      <button id="injectOn" class="warn">Arm seeded fault</button>
-      <button id="injectOff">Disarm fault</button>
+  </section>
+  <section class="panel" aria-labelledby="studio-heading">
+    <div class="panel-heading">
+      <h2 id="studio-heading">Make it speak.</h2>
+      <span id="status" role="status">idle</span>
     </div>
-    <pre id="log">Waiting. Start the avatar session, arm the fault, make it speak —
+    <label for="text">What should Ruhana say?</label>
+    <input id="text" type="text" value="Good morning Ayesha, your order is ready." />
+    <p class="hint">Start the avatar, then send a sentence to hear it spoken.</p>
+    <button id="speak"><span>Speak</span><span aria-hidden="true">↗</span></button>
+    <div class="repair">
+      <div class="repair-heading"><h3>Self-healing demo</h3><span class="tag" id="fault">fault: off</span></div>
+      <p>Introduce a pronunciation fault. Compare the voice before and after a repair.</p>
+      <div class="actions">
+        <button id="injectOn" class="secondary">Arm seeded fault</button>
+        <button id="injectOff" class="quiet">Disarm fault</button>
+      </div>
+    </div>
+    <details>
+      <summary>Session activity</summary>
+      <pre id="log">Waiting. Start the avatar session, arm the fault, make it speak —
 then watch Evolve repair the pronunciation and speak again.</pre>
+    </details>
+  </section>
   </div>
-</div>
+  <footer class="footer"><span>Ruhana Evolve · Self-healing voice &amp; video agents</span><span class="tag" id="version">version: —</span></footer>
+</main>
 
 <script type="module">
 let audioStream = null;
