@@ -15,7 +15,7 @@
   },
   "expires": "session_end",
   "predecessor": null,
-  "artifact_hash": "eedac453662f0aa9fc6cc023ecbcfff6cf22075ee2aabfe85a34065ce0500950",
+  "artifact_hash": "9cd1eb73ce8703a71313aa810c8d21792c5025ce69d949c183b7262233594161",
   "issuer": "ruhana-evolve/gate@v1",
   "base_version": "base-1",
   "overlay_version": 1,
