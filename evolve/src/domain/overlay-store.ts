@@ -74,7 +74,14 @@ export class SessionOverlayRegistry {
    */
   release(sessionId: string, artifact: RepairArtifact): RepairOverlay {
     const s = this.ensure(sessionId);
-    const repair = artifact.repair;
+    // Serve the repair with its artifact hash and issue version so the runtime
+    // can verify integrity (contracts/artifact.ts). Wire-only fields are not
+    // part of the hashed body, so this enrichment cannot invalidate the hash.
+    const repair: Repair = {
+      ...artifact.repair,
+      artifact_hash: artifact.artifact_hash,
+      issued_overlay_version: artifact.overlay_version,
+    };
 
     // Supersede rather than accumulate: two pronunciation repairs for one entity
     // would leave the runtime resolving the conflict, which is our job.

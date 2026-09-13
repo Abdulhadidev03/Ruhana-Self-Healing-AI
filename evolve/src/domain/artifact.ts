@@ -11,28 +11,12 @@
 // decision for both sides, recorded in INTEGRATION.md.
 
 import type { Repair } from "../../../contracts/types.ts";
-import { canonicalJson, sha256 } from "./ids.ts";
 import type { RepairArtifact } from "./model.ts";
+import { artifactBody, hashRepair } from "../../../contracts/artifact.ts";
+
+export { artifactBody, hashRepair };
 
 export const ISSUER = "ruhana-evolve/gate@v1";
-
-/** The bytes that the hash covers. Ordering is canonical so the hash is stable. */
-export function artifactBody(repair: Repair, baseVersion: string, overlayVersion: number): string {
-  return canonicalJson({
-    repair_id: repair.repair_id,
-    type: repair.type,
-    scope: repair.scope,
-    payload: repair.payload,
-    expires: repair.expires,
-    predecessor: repair.predecessor,
-    base_version: baseVersion,
-    overlay_version: overlayVersion,
-  });
-}
-
-export function hashRepair(repair: Repair, baseVersion: string, overlayVersion: number): string {
-  return sha256(artifactBody(repair, baseVersion, overlayVersion));
-}
 
 export function issueArtifact(params: {
   repair: Repair;

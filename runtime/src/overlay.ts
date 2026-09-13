@@ -4,6 +4,7 @@
 // effective version never changes underneath it.
 
 import type { Repair, RepairOverlay } from "../../contracts/types.ts";
+import { verifyWireRepair } from "../../contracts/artifact.ts";
 
 export interface VersionSnapshot {
   effectiveVersion: string;
@@ -28,6 +29,12 @@ export class SessionOverlayStore {
     if (overlay.session_id !== this.sessionId) return false;
     if (overlay.overlay_version <= this.active.overlay_version) return false;
     if (this.staged && overlay.overlay_version <= this.staged.overlay_version) return false;
+    // Artifact verification (plan §10): an unsigned repair is tolerated for
+    // back-compatibility, but a repair whose hash does not verify poisons the
+    // whole overlay — the runtime cannot trust a partially valid version.
+    for (const repair of overlay.repairs) {
+      if (verifyWireRepair(repair, this.baseVersion) === "invalid") return false;
+    }
     this.staged = overlay;
     return true;
   }

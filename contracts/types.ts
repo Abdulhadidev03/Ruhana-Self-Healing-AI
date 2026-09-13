@@ -82,6 +82,14 @@ export interface Repair {
   payload: PronunciationPayload | EntityRebindingPayload;
   expires: "session_end" | string;
   predecessor: string | null;
+  /**
+   * sha256 over the canonical repair body (see contracts/artifact.ts); the
+   * runtime verifies it before applying (plan §10). Optional for
+   * back-compatibility — an unsigned repair is accepted, a WRONG hash is not.
+   */
+  artifact_hash?: string;
+  /** Overlay version the gate issued this repair at; the hash covers it. */
+  issued_overlay_version?: number;
 }
 
 /**
