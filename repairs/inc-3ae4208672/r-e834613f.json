@@ -66,7 +66,7 @@
       ]
     },
     {
-      "candidate_id": "cand-eaac71f3",
+      "candidate_id": "cand-2628795a",
       "refuted": true,
       "reason": "Refuted by 4 fixture(s): fx-repro-01, fx-fresh-02, fx-position-03, fx-negative-neighbour-05",
       "acoustic_score": 0.6,
@@ -76,19 +76,19 @@
           "fixture_id": "fx-repro-01",
           "passed": false,
           "negative_control": false,
-          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/əˈjiːʃə/' differs from reference '/ɑːˈjeɪʃə/'."
+          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/ˈaɪʃə/' differs from reference '/ɑːˈjeɪʃə/'."
         },
         {
           "fixture_id": "fx-fresh-02",
           "passed": false,
           "negative_control": false,
-          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/əˈjiːʃə/' differs from reference '/ɑːˈjeɪʃə/'."
+          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/ˈaɪʃə/' differs from reference '/ɑːˈjeɪʃə/'."
         },
         {
           "fixture_id": "fx-position-03",
           "passed": false,
           "negative_control": false,
-          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/əˈjiːʃə/' differs from reference '/ɑːˈjeɪʃə/'."
+          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/ˈaɪʃə/' differs from reference '/ɑːˈjeɪʃə/'."
         },
         {
           "fixture_id": "fx-negative-asia-04",
@@ -100,7 +100,7 @@
           "fixture_id": "fx-negative-neighbour-05",
           "passed": false,
           "negative_control": true,
-          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/əˈjiːʃə/' differs from reference '/ɑːˈjeɪʃə/'."
+          "detail": "Acoustic judge scored the target at 0.60 against the reference (threshold 0.95). Rendered '/ˈaɪʃə/' differs from reference '/ɑːˈjeɪʃə/'."
         },
         {
           "fixture_id": "fx-no-reference-06",
