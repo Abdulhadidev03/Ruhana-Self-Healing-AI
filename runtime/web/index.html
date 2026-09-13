@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Ruhana Evolve — live demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; background: #101216; color: #e8e8e8; }
+  h1 { font-size: 1.3rem; font-weight: 600; }
+  video { width: 320px; height: 320px; background: #000; border-radius: 12px; }
+  .row { display: flex; gap: 1.5rem; align-items: flex-start; }
+  .panel { flex: 1; }
+  button { background: #3b82f6; color: white; border: 0; border-radius: 8px; padding: 0.5rem 1rem; margin: 0.25rem 0.25rem 0.25rem 0; cursor: pointer; }
+  button.warn { background: #b45309; }
+  input[type=text] { width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid #333; background: #1a1d23; color: #eee; }
+  pre { background: #1a1d23; border-radius: 8px; padding: 0.75rem; font-size: 0.78rem; overflow-x: auto; white-space: pre-wrap; }
+  .tag { display: inline-block; background: #1f2937; border-radius: 6px; padding: 0.1rem 0.5rem; margin-right: 0.4rem; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>Ruhana Evolve — self-healing voice demo</h1>
+<div class="row">
+  <div>
+    <video id="avatar" autoplay playsinline></video>
+    <div>
+      <button id="start">Start avatar session</button>
+    </div>
+  </div>
+  <div class="panel">
+    <p>
+      <span class="tag" id="version">version: —</span>
+      <span class="tag" id="fault">fault: off</span>
+      <span class="tag" id="status">idle</span>
+    </p>
+    <input id="text" type="text" value="Good morning Ayesha, your order is ready." />
+    <div>
+      <button id="speak">Speak</button>
+      <button id="injectOn" class="warn">Arm seeded fault</button>
+      <button id="injectOff">Disarm fault</button>
+    </div>
+    <pre id="log">Waiting. Start the avatar session, arm the fault, make it speak —
+then watch Evolve repair the pronunciation and speak again.</pre>
+  </div>
+</div>
+
+<script type="module">
+let audioStream = null;
+
+const log = (m) => {
+  const el = document.getElementById("log");
+  el.textContent = (m + "\n\n" + el.textContent).slice(0, 4000);
+};
+const setStatus = (s) => (document.getElementById("status").textContent = s);
+
+async function refreshState() {
+  const s = await fetch("/api/state").then((r) => r.json());
+  document.getElementById("version").textContent = "version: " + s.effective_version;
+  document.getElementById("fault").textContent = "fault: " + (s.injected_fault ?? "off");
+}
+setInterval(refreshState, 1500);
+refreshState();
+
+document.getElementById("start").onclick = async () => {
+  setStatus("starting session…");
+  try {
+    const { sessionToken } = await fetch("/api/session-token", { method: "POST" }).then((r) => r.json());
+    const { createClient } = await import("https://esm.sh/@anam-ai/js-sdk@latest");
+    const client = createClient(sessionToken, { disableInputAudio: true });
+    await client.streamToVideoElement("avatar");
+    audioStream = client.createAgentAudioInputStream({
+      encoding: "pcm_s16le",
+      sampleRate: 16000,
+      channels: 1,
+    });
+    setStatus("avatar live");
+    log("Anam session started; agent audio input stream open (16 kHz mono PCM).");
+  } catch (err) {
+    setStatus("session failed");
+    log("Session error: " + err);
+  }
+};
+
+document.getElementById("speak").onclick = async () => {
+  const text = document.getElementById("text").value;
+  setStatus("rendering…");
+  const res = await fetch("/api/speak", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const body = await res.json();
+  if (body.status !== "delivered") {
+    setStatus("turn " + (body.status ?? res.status));
+    log("Speak failed: " + JSON.stringify(body));
+    return;
+  }
+  log(
+    "Turn @ " + body.effective_version +
+    (body.injected_fault ? "  [fault: " + body.injected_fault + "]" : "") +
+    "\nspeech_input: " + JSON.stringify(body.speech_input)
+  );
+  const bytes = Uint8Array.from(atob(body.pcm_base64), (c) => c.charCodeAt(0));
+  if (audioStream) {
+    // ~250ms chunks: 16000 Hz * 2 bytes * 0.25s = 8000 bytes
+    for (let off = 0; off < bytes.length; off += 8000) {
+      audioStream.sendAudioChunk(bytes.subarray(off, off + 8000));
+    }
+    audioStream.endSequence();
+    setStatus("spoken via avatar");
+  } else {
+    // No avatar session: play locally so the pronunciation is still audible.
+    const ctx = new AudioContext({ sampleRate: body.sample_rate });
+    const pcm = new Int16Array(bytes.buffer);
+    const buf = ctx.createBuffer(1, pcm.length, body.sample_rate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start();
+    setStatus("spoken locally (no avatar session)");
+  }
+  refreshState();
+};
+
+document.getElementById("injectOn").onclick = async () => {
+  await fetch("/api/inject", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true }) });
+  refreshState();
+  log("Seeded fault ARMED: pronunciation override will be dropped for Ayesha.");
+};
+document.getElementById("injectOff").onclick = async () => {
+  await fetch("/api/inject", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: false }) });
+  refreshState();
+  log("Seeded fault disarmed.");
+};
+</script>
+</body>
+</html>
