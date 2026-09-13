@@ -39,7 +39,9 @@ import { loadEnv, type Env } from "./util/env.ts";
 export const TENANT = "demo";
 export const SESSION = "s-42";
 export const BASE_VERSION = "base-1";
-export const VOICE = "kokoro-82m/af_heart";
+// Must match the live worker's reported version exactly (worker /health);
+// the worker refuses to render candidates on a different voice (plan §6C).
+export const VOICE = "kokoro-82M:af_heart";
 
 /** The target entity. Reference pronunciation stands in for a human recording. */
 export const AYESHA = {

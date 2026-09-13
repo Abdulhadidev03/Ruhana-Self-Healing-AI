@@ -151,10 +151,11 @@ export class OpenAIAudioJudge implements AudioJudge {
     const res = await this.fetchImpl(this.baseUrl + "/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: "Bearer " + this.apiKey },
+      // No response_format here: the audio chat models reject json_object.
+      // The instruction demands bare JSON and parsing tolerates fencing.
       body: JSON.stringify({
         model: this.model,
         modalities: ["text"],
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "user",
@@ -170,7 +171,9 @@ export class OpenAIAudioJudge implements AudioJudge {
     if (!res.ok) throw new Error("openai audio " + res.status + ": " + (await res.text().catch(() => "")));
 
     const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const parsed = JSON.parse(body.choices?.[0]?.message?.content ?? "{}") as {
+    const raw = body.choices?.[0]?.message?.content ?? "{}";
+    const jsonText = raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}";
+    const parsed = JSON.parse(jsonText) as {
       match_score?: number;
       collateral_flags?: string[];
       notes?: string;

@@ -508,7 +508,18 @@ export class EvolveOrchestrator {
         neighbouringSurfaces: [],
       });
 
-      if (assessment.match_score >= 0.95) {
+      // Same two-tier evidence as the verifier: when the renderer reports the
+      // phonemes actually used, that mechanical check outranks the uncalibrated
+      // acoustic score (which scores even correct renders at 0.6-0.9).
+      const norm = (p: string) => p.trim().replace(/^\/+|\/+$/g, "");
+      const renderedTarget =
+        audio.rendered_tokens?.[entityId ?? ""] ?? audio.rendered_tokens?.[record.canonical_text];
+      const verifiedByTokens =
+        renderedTarget !== undefined &&
+        norm(renderedTarget) === norm(record.reference_phonemes) &&
+        assessment.collateral_flags.length === 0;
+
+      if (verifiedByTokens || (renderedTarget === undefined && assessment.match_score >= 0.95)) {
         const incident = this.deps.store.getIncident(artifact.incident_id);
         if (incident && incident.status !== "resolved") {
           this.deps.store.updateIncident(incident.incident_id, { status: "resolved" });

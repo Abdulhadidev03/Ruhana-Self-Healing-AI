@@ -1,7 +1,7 @@
 {
   "$comment": "PROTECTED FIXTURE SET (plan §14). Repair agents have no write access to this file. It is loaded read-only by the verifier and executed again by CI outside the proposer's permissions (plan §11, §15). Expected outcomes were decided BEFORE any candidate was generated; editing them to make a candidate pass is the exact failure this file exists to prevent.",
   "tenant": "demo",
-  "voice_model_version": "kokoro-82m/af_heart",
+  "voice_model_version": "kokoro-82M:af_heart",
   "fixtures": [
     {
       "fixture_id": "fx-repro-01",

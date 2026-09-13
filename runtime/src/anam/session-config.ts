@@ -1,46 +1,52 @@
-// Session configuration for Anam audio passthrough mode (plan §8): passthrough
-// is configured AT SESSION CREATION — do not assume a live built-in session can
-// switch modes. In this mode the app supplies its own STT, brain, and TTS, and
-// pushes PCM through the agent audio input stream.
+// Session configuration for Anam audio passthrough, matching the documented
+// SDK (anam.ai/docs/javascript-sdk/examples/custom-tts, verified 2026-09-14):
+//
+//   server:  personaConfig: { avatarId, avatarModel, enableAudioPassthrough: true }
+//   client:  createClient(sessionToken, { disableInputAudio: true })
+//   stream:  anamClient.createAgentAudioInputStream(ANAM_AUDIO_INPUT_FORMAT)
+//            .sendAudioChunk(...) / .endSequence()
+//
+// Passthrough is configured AT SESSION CREATION (plan §8) — a live built-in
+// session cannot switch modes. The input stream must be created after
+// streamToVideoElement() resolves.
 
 export interface PassthroughSessionOptions {
-  personaName: string;
   avatarId: string;
-  sampleRate: number;
+  /** Anam avatar model; the custom-TTS example uses "cara-4". */
+  avatarModel?: string;
+  name?: string;
 }
+
+/** Documented requirement: PCM 16-bit, 16000 Hz, mono. Kokoro renders at
+ *  24000 Hz — resample with resamplePcm16 before sending (audio/pcm.ts). */
+export const ANAM_AUDIO_INPUT_FORMAT = {
+  encoding: "pcm_s16le",
+  sampleRate: 16000,
+  channels: 1,
+} as const;
 
 export interface PassthroughSessionConfig {
   personaConfig: {
-    name: string;
     avatarId: string;
-    // Custom-client mode: Anam's built-in LLM/TTS path is bypassed.
-    llmId: "CUSTOMER_CLIENT_V1";
-  };
-  audioPassthrough: {
-    enabled: true;
-    encoding: "pcm_s16le";
-    channels: 1;
-    sampleRate: number;
+    avatarModel: string;
+    enableAudioPassthrough: true;
+    name?: string;
   };
 }
 
 export function buildPassthroughSessionConfig(
   opts: PassthroughSessionOptions,
 ): PassthroughSessionConfig {
-  if (!Number.isInteger(opts.sampleRate) || opts.sampleRate <= 0) {
-    throw new Error(`invalid sampleRate: ${opts.sampleRate}`);
-  }
+  if (!opts.avatarId) throw new Error("avatarId is required");
   return {
     personaConfig: {
-      name: opts.personaName,
       avatarId: opts.avatarId,
-      llmId: "CUSTOMER_CLIENT_V1",
-    },
-    audioPassthrough: {
-      enabled: true,
-      encoding: "pcm_s16le",
-      channels: 1,
-      sampleRate: opts.sampleRate,
+      avatarModel: opts.avatarModel ?? "cara-4",
+      enableAudioPassthrough: true,
+      ...(opts.name ? { name: opts.name } : {}),
     },
   };
 }
+
+/** Client-side options for createClient: our mic path is separate (plan §3). */
+export const ANAM_CLIENT_OPTIONS = { disableInputAudio: true } as const;

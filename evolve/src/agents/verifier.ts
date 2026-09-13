@@ -29,8 +29,15 @@ import type { ReferenceRegistry } from "../domain/registry.ts";
  * probability of correctness". This constant is therefore an engineering
  * threshold on an uncalibrated signal, not a confidence level — and it is only
  * ever one of several checks, never the sole release criterion.
+ *
+ * Calibration (measured live 2026-09-14, gpt-audio-1.5 judging Kokoro output):
+ * renders using the exact reference phonemes scored 0.60–0.90; the seeded wrong
+ * baseline scored 0.40. The threshold applies only on the FALLBACK path where
+ * the renderer cannot report which phonemes it used; when it can
+ * (rendered_tokens, local Kokoro), that mechanical check is primary and the
+ * judge is consulted for collateral damage only.
  */
-export const ACOUSTIC_MATCH_THRESHOLD = 0.95;
+export const ACOUSTIC_MATCH_THRESHOLD = 0.8;
 
 export interface FixtureExpectation {
   entity_id: string | null;
@@ -253,6 +260,57 @@ export class AdversarialVerifier {
     }
 
     const audio = await this.renderFixture(candidate, fixture, tenant, entityId);
+
+    // --- Primary check: what the renderer says it actually pronounced. ---
+    // Local Kokoro reports the phoneme string used per token (INTEGRATION.md:
+    // "it makes verification much stronger"); that is deterministic evidence,
+    // so it outranks the uncalibrated acoustic score. Hosted providers that
+    // cannot report tokens fall through to the acoustic threshold below.
+    const normPhonemes = (p: string) => p.trim().replace(/^\/+|\/+$/g, "");
+    const renderedTarget =
+      audio.rendered_tokens?.[fixture.expect.entity_id ?? ""] ??
+      audio.rendered_tokens?.[record.canonical_text];
+    if (renderedTarget !== undefined) {
+      if (normPhonemes(renderedTarget) !== normPhonemes(record.reference_phonemes)) {
+        return {
+          ...base,
+          passed: false,
+          detail:
+            "Renderer reports the target was pronounced /" +
+            normPhonemes(renderedTarget) +
+            "/ but the reference is /" +
+            normPhonemes(record.reference_phonemes) +
+            "/.",
+        };
+      }
+      const collateral = await this.judge.assess({
+        candidate: audio,
+        referenceAudioId: record.reference_audio_id,
+        referencePhonemes: record.reference_phonemes,
+        targetSurface: record.canonical_text,
+        targetEntityId: fixture.expect.entity_id,
+        neighbouringSurfaces: fixture.expect.unchanged_surfaces ?? [],
+      });
+      if (collateral.collateral_flags.length > 0) {
+        return {
+          ...base,
+          passed: false,
+          detail:
+            "Judge flagged collateral change to: " + collateral.collateral_flags.join(", ") + ".",
+        };
+      }
+      const collision = this.neighbourCollision(candidate, fixture, tenant, record.canonical_text);
+      if (collision) return { ...base, passed: false, detail: collision };
+      return {
+        ...base,
+        passed: true,
+        detail:
+          "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score " +
+          collateral.match_score.toFixed(2) +
+          ").",
+      };
+    }
+
     const assessment = await this.judge.assess({
       candidate: audio,
       referenceAudioId: record.reference_audio_id,
@@ -284,29 +342,8 @@ export class AdversarialVerifier {
       };
     }
 
-    // --- Invariant 3: collision with a neighbouring entity. -------------
-    // The plan's rejection proof (§12): a candidate that fixes the target but
-    // makes it indistinguishable from a different registered person is harmful
-    // even though the target itself now "matches".
-    for (const otherId of fixture.expect.other_entities_unchanged ?? []) {
-      const other = this.registry.get(tenant, otherId);
-      if (!other?.reference_phonemes) continue;
-      const candidatePhonemes = (candidate.payload as { phonemes?: string }).phonemes;
-      if (candidatePhonemes && candidatePhonemes === other.reference_phonemes) {
-        return {
-          ...base,
-          passed: false,
-          detail:
-            "Candidate pronounces '" +
-            record.canonical_text +
-            "' identically to a different registered entity '" +
-            otherId +
-            "' (" +
-            other.canonical_text +
-            "). The two people would become indistinguishable.",
-        };
-      }
-    }
+    const collision = this.neighbourCollision(candidate, fixture, tenant, record.canonical_text);
+    if (collision) return { ...base, passed: false, detail: collision };
 
     return {
       ...base,
@@ -316,5 +353,34 @@ export class AdversarialVerifier {
         assessment.match_score.toFixed(2) +
         "); no collateral or scope violation.",
     };
+  }
+
+  // --- Invariant 3: collision with a neighbouring entity. ---------------
+  // The plan's rejection proof (§12): a candidate that fixes the target but
+  // makes it indistinguishable from a different registered person is harmful
+  // even though the target itself now "matches".
+  private neighbourCollision(
+    candidate: Candidate,
+    fixture: Fixture,
+    tenant: string,
+    targetName: string,
+  ): string | null {
+    for (const otherId of fixture.expect.other_entities_unchanged ?? []) {
+      const other = this.registry.get(tenant, otherId);
+      if (!other?.reference_phonemes) continue;
+      const candidatePhonemes = (candidate.payload as { phonemes?: string }).phonemes;
+      if (candidatePhonemes && candidatePhonemes === other.reference_phonemes) {
+        return (
+          "Candidate pronounces '" +
+          targetName +
+          "' identically to a different registered entity '" +
+          otherId +
+          "' (" +
+          other.canonical_text +
+          "). The two people would become indistinguishable."
+        );
+      }
+    }
+    return null;
   }
 }
