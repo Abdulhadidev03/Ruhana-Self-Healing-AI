@@ -10,7 +10,8 @@
     "mock:evolve": "node --experimental-strip-types contracts/mocks/evolve-mock-server.ts",
     "evolve:serve": "tsx evolve/src/api/server.ts",
     "evolve:demo": "tsx evolve/src/demo.ts",
-    "evolve:eval": "tsx evolve/src/eval/run.ts"
+    "evolve:eval": "tsx evolve/src/eval/run.ts",
+    "evolve:check": "tsx evolve/src/check-apps.ts"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",
