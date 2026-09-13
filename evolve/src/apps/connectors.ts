@@ -210,7 +210,9 @@ export interface SlackConfig {
  * are Slack's own short names, which differ from GitHub's for the same glyph —
  * ⚖️ is :scales: in Slack but :balance_scale: on GitHub, and 🗣️ is
  * :speaking_head_in_silhouette: in Slack but :speaking_head: on GitHub. Check a
- * new one against Slack's picker, not another platform's list. Names and faces are presentation only;
+ * new one against Slack's picker, not another platform's list — or prefer a
+ * name both platforms spell the same way, which is the case for every entry
+ * here now. Names and faces are presentation only;
  * what makes the participants distinct is that each one inspected a different
  * slice of the evidence (see agents/protocol.ts), not that it posts under a
  * different avatar.
@@ -221,7 +223,7 @@ export const AGENT_IDENTITY: Record<string, { name: string; emoji: string }> = {
   speech: { name: "Agent Spec", emoji: ":speaking_head_in_silhouette:" },
   runtime: { name: "Agent Runtime", emoji: ":gear:" },
   verifier: { name: "Agent Veri", emoji: ":test_tube:" },
-  supervisor: { name: "Agent Frank the Boss", emoji: ":scales:" },
+  supervisor: { name: "Agent Frank the Boss", emoji: ":tophat:" },
 };
 
 /**
