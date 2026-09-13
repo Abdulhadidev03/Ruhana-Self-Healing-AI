@@ -37,13 +37,13 @@
           "fixture_id": "fx-fresh-02",
           "passed": true,
           "negative_control": false,
-          "detail": "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score 0.90)."
+          "detail": "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score 0.80)."
         },
         {
           "fixture_id": "fx-position-03",
           "passed": true,
           "negative_control": false,
-          "detail": "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score 0.80)."
+          "detail": "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score 0.90)."
         },
         {
           "fixture_id": "fx-negative-asia-04",
@@ -55,7 +55,7 @@
           "fixture_id": "fx-negative-neighbour-05",
           "passed": true,
           "negative_control": true,
-          "detail": "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score 0.90)."
+          "detail": "Renderer confirmed the reference phonemes were used; judge found no collateral change (acoustic score 0.80)."
         },
         {
           "fixture_id": "fx-no-reference-06",
