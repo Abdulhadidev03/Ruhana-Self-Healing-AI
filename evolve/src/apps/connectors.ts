@@ -202,7 +202,15 @@ export interface SlackConfig {
 }
 
 /**
- * How each agent appears in the thread. Names and faces are presentation only;
+ * How each agent appears in the thread.
+ *
+ * A note on the emoji names: Slack does NOT validate icon_emoji. It echoes back
+ * whatever you send and renders a blank icon for anything it does not know, so
+ * a wrong name fails silently and cannot be caught from the API response. These
+ * are Slack's own short names, which differ from GitHub's for the same glyph —
+ * ⚖️ is :scales: in Slack but :balance_scale: on GitHub, and 🗣️ is
+ * :speaking_head_in_silhouette: in Slack but :speaking_head: on GitHub. Check a
+ * new one against Slack's picker, not another platform's list. Names and faces are presentation only;
  * what makes the participants distinct is that each one inspected a different
  * slice of the evidence (see agents/protocol.ts), not that it posts under a
  * different avatar.
@@ -213,7 +221,7 @@ export const AGENT_IDENTITY: Record<string, { name: string; emoji: string }> = {
   speech: { name: "Agent Spec", emoji: ":speaking_head_in_silhouette:" },
   runtime: { name: "Agent Runtime", emoji: ":gear:" },
   verifier: { name: "Agent Veri", emoji: ":test_tube:" },
-  supervisor: { name: "Agent Frank the Boss", emoji: ":balance_scale:" },
+  supervisor: { name: "Agent Frank the Boss", emoji: ":scales:" },
 };
 
 /**
