@@ -184,7 +184,7 @@ describe("per-agent Slack identity", () => {
 
     expect(slack.customizeWorks).toBe(false);
     const text = (rec.requests[0]!.body as { text: string }).text;
-    expect(text).toContain("*Verifier*");
+    expect(text).toContain("*" + AGENT_IDENTITY["verifier"]!.name + "*");
     expect(text).toContain("could not refute it");
   });
 

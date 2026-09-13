@@ -208,14 +208,22 @@ export interface SlackConfig {
  * different avatar.
  */
 export const AGENT_IDENTITY: Record<string, { name: string; emoji: string }> = {
-  perception: { name: "Perception", emoji: ":headphones:" },
-  memory: { name: "Memory", emoji: ":brain:" },
-  speech: { name: "Speech", emoji: ":speaking_head_in_silhouette:" },
-  runtime: { name: "Runtime", emoji: ":gear:" },
-  verifier: { name: "Verifier", emoji: ":test_tube:" },
-  supervisor: { name: "Supervisor", emoji: ":balance_scale:" },
+  perception: { name: "Agent Percept", emoji: ":headphones:" },
+  memory: { name: "Agent Mem", emoji: ":brain:" },
+  speech: { name: "Agent Spec", emoji: ":speaking_head_in_silhouette:" },
+  runtime: { name: "Agent Runtime", emoji: ":gear:" },
+  verifier: { name: "Agent Veri", emoji: ":test_tube:" },
+  supervisor: { name: "Agent Frank the Boss", emoji: ":balance_scale:" },
 };
 
+/**
+ * Display name for a role key, for use inside message text (e.g. "-> Agent
+ * Spec"). Falls back to the raw key so an unknown role is visible rather than
+ * silently blank.
+ */
+export function displayName(role: string): string {
+  return AGENT_IDENTITY[role]?.name ?? role;
+}
 /**
  * Slack is a coordination and audit surface, NOT a reviewer. Plan §11: "no
  * approval reactions or merge buttons sit in the loop." Nothing posted here is

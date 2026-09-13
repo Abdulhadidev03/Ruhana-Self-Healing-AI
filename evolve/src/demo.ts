@@ -9,6 +9,7 @@
 import { AYESHA, AISHA, SESSION, TENANT, buildWorld, makeTurn } from "./scenario.ts";
 import { loadEnv, describeCapabilities } from "./util/env.ts";
 import { verifyArtifact } from "./domain/artifact.ts";
+import { displayName } from "./apps/connectors.ts";
 
 const live = process.argv.includes("--live");
 const NEWLINE = "\n";
@@ -83,17 +84,12 @@ async function main(): Promise<void> {
   if (outcome.discussion.length === 0) {
     console.log("  No challenge round ran for this incident.");
   } else {
-    const face: Record<string, string> = {
-      perception: "PERCEPTION",
-      memory: "MEMORY    ",
-      speech: "SPEECH    ",
-      verifier: "VERIFIER  ",
-      supervisor: "SUPERVISOR",
-    };
+    // Same names Slack shows, so the console transcript and the thread match.
+    const face = (role: string) => displayName(role).padEnd(20);
     for (const m of outcome.discussion) {
-      const at = m.to === "all" ? "" : " -> " + m.to;
+      const at = m.to === "all" ? "" : " -> " + displayName(m.to);
       console.log(
-        (NEWLINE + "  " + (face[m.from] ?? m.from) + at + "  [" + m.stance + "]").replace(NEWLINE, NEWLINE),
+        NEWLINE + "  " + face(m.from) + at + "  [" + m.stance + "]",
       );
       console.log("    " + m.text);
       if (m.references.length > 0) console.log("    cites: " + m.references.join(", "));

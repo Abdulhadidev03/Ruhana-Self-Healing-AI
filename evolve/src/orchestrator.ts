@@ -40,6 +40,7 @@ import type { CandidateRenderer } from "./providers/renderer.ts";
 import type { AudioJudge } from "./providers/audio-judge.ts";
 import type { Clock } from "./providers/clock.ts";
 import { AppWriteQueue } from "./apps/queue.ts";
+import { displayName } from "./apps/connectors.ts";
 import type { GithubConnector, SentryConnector, SlackConnector } from "./apps/connectors.ts";
 
 export interface AppConnectors {
@@ -617,7 +618,7 @@ export class EvolveOrchestrator {
     if (!slack || messages.length === 0) return;
 
     for (const [index, m] of messages.entries()) {
-      const addressed = m.to !== "all" ? "→ *" + m.to + "*  " : "";
+      const addressed = m.to !== "all" ? "→ *" + displayName(m.to) + "*  " : "";
       const stance =
         m.stance === "challenge" ? " :warning:" : m.stance === "refine" ? " :pencil2:" : "";
       const cites = m.references.length > 0 ? "\n_cites:_ `" + m.references.join("`, `") + "`" : "";
