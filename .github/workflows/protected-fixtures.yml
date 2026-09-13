@@ -1,0 +1,100 @@
+# Protected regression fixtures (plan §11, §15).
+#
+# This workflow exists so the fixtures are executed OUTSIDE the repair agent's
+# permissions: "the fixtures and workflow definition sit outside the repair
+# agent's write scope so a candidate cannot edit its own judge."
+#
+# Two things enforce that:
+#   * GithubConnector.manifestPath() refuses to write anywhere near .github/ or
+#     fixtures/, so a machine-generated commit cannot touch this file or the
+#     fixture data.
+#   * The guard job below fails if a commit modifies either path, so an edit made
+#     some other way is still caught before the results can be trusted.
+
+name: protected-fixtures
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: fixtures and workflow unmodified
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Refuse machine commits that edit the protected set
+        run: |
+          # A machine-generated repair commit must never touch its own judge.
+          #
+          # Detection is by CONTENT, not by author name. The repair service
+          # commits through the GitHub API under whatever identity its token
+          # resolves to, so the author is not a reliable signal — and a guard
+          # keyed on a project name silently stops working the moment the
+          # project is renamed. What IS reliable: a repair commit always writes
+          # a manifest under repairs/. If one commit touches both that path and
+          # a protected path, the proposer is editing its own judge.
+          if [ "$(git rev-list --count HEAD)" -lt 2 ]; then
+            echo "single commit; nothing to compare"
+            exit 0
+          fi
+
+          PROTECTED=$(git diff --name-only HEAD~1 HEAD -- fixtures/ .github/workflows/ || true)
+          MANIFESTS=$(git diff --name-only HEAD~1 HEAD -- 'repairs/**' || true)
+
+          if [ -z "$PROTECTED" ]; then
+            echo "Protected paths untouched."
+            exit 0
+          fi
+
+          echo "Protected paths changed:"
+          echo "$PROTECTED"
+
+          if [ -n "$MANIFESTS" ]; then
+            echo "…in the same commit as a generated repair manifest:"
+            echo "$MANIFESTS"
+            echo "::error::A repair commit modified the fixtures or CI that judge it."
+            exit 1
+          fi
+
+          echo "No repair manifest in this commit; treated as a human change and allowed."
+
+  verify:
+    name: typecheck, tests, protected fixtures
+    runs-on: ubuntu-latest
+    needs: guard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and integration tests (Part A + Part B)
+        run: npm test
+
+      - name: Protected fixture evaluation
+        # Runs with no provider credentials: the deterministic path must hold on
+        # its own, and the report states which providers produced the numbers.
+        run: npx tsx evolve/src/eval/run.ts | tee eval-report.md
+
+      - name: Publish evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-report.md
