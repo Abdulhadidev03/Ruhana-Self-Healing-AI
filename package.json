@@ -1,0 +1,17 @@
+{
+  "name": "ruhana-evolve",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "mock:evolve": "node --experimental-strip-types contracts/mocks/evolve-mock-server.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
