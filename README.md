@@ -4,9 +4,8 @@
 
 > **Watch the demo on Loom**
 >
-> **Demo video coming here.** See a pronunciation failure, the specialist investigation, candidate verification, and a corrected avatar response.
+> (https://www.loom.com/share/60e414f3a97a491b80e654c30ca6e72d)
 >
-> <!-- LOOM DEMO: Replace the line above with [Watch the full demo](YOUR_LOOM_SHARE_URL). You can add a linked thumbnail here too. -->
 
 Ruhana Evolve is a separately running reliability extension for **Ruhana AI**. It diagnoses a narrow class of voice-agent failures, tests possible repairs, and releases a scoped correction into the running conversation. Its three operational integrations are **Sentry, Slack, and GitHub**. Its live AI stack combines **Kokoro TTS, the Anam API, and the OpenAI API**, including **GPT-5.6 Terra** for candidate proposals and specialist discussion.
 
