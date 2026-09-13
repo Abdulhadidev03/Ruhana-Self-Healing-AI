@@ -1,0 +1,89 @@
+{
+  "$comment": "PROTECTED FIXTURE SET (plan §14). Repair agents have no write access to this file. It is loaded read-only by the verifier and executed again by CI outside the proposer's permissions (plan §11, §15). Expected outcomes were decided BEFORE any candidate was generated; editing them to make a candidate pass is the exact failure this file exists to prevent.",
+  "tenant": "demo",
+  "voice_model_version": "kokoro-82m/af_heart",
+  "fixtures": [
+    {
+      "fixture_id": "fx-repro-01",
+      "kind": "reproducer",
+      "required": true,
+      "description": "The original failing utterance must pronounce the target entity as the reference.",
+      "intended_text": "Good morning Ayesha, your order is ready.",
+      "entities": [{ "entity_id": "demo-person-17", "surface": "Ayesha" }],
+      "expect": {
+        "entity_id": "demo-person-17",
+        "pronounced_as": "reference",
+        "unchanged_surfaces": ["morning", "order", "ready"]
+      }
+    },
+    {
+      "fixture_id": "fx-fresh-02",
+      "kind": "regression",
+      "required": true,
+      "description": "A sentence never used during candidate generation. Plan §6C: replaying the winning candidate file proves less than a genuinely new sentence.",
+      "intended_text": "Ayesha, I have updated your delivery address.",
+      "entities": [{ "entity_id": "demo-person-17", "surface": "Ayesha" }],
+      "expect": {
+        "entity_id": "demo-person-17",
+        "pronounced_as": "reference",
+        "unchanged_surfaces": ["delivery", "address", "updated"]
+      }
+    },
+    {
+      "fixture_id": "fx-position-03",
+      "kind": "regression",
+      "required": true,
+      "description": "Entity at the end of the sentence, followed by punctuation (plan §14: different sentence positions and punctuation).",
+      "intended_text": "The appointment has been confirmed for Ayesha.",
+      "entities": [{ "entity_id": "demo-person-17", "surface": "Ayesha" }],
+      "expect": {
+        "entity_id": "demo-person-17",
+        "pronounced_as": "reference",
+        "unchanged_surfaces": ["appointment", "confirmed"]
+      }
+    },
+    {
+      "fixture_id": "fx-negative-asia-04",
+      "kind": "negative_control",
+      "required": true,
+      "description": "NEGATIVE CONTROL (plan §6A, §12). 'Asia' is a genuinely correct, unrelated word. A pronunciation repair scoped to the entity 'Ayesha' must not touch it. A global find-and-replace fails here by construction.",
+      "intended_text": "Our Asia team will follow up tomorrow.",
+      "entities": [],
+      "expect": {
+        "entity_id": null,
+        "pronounced_as": "default",
+        "unchanged_surfaces": ["Asia", "team", "tomorrow"]
+      }
+    },
+    {
+      "fixture_id": "fx-negative-neighbour-05",
+      "kind": "negative_control",
+      "required": true,
+      "description": "NEGATIVE CONTROL. A different registered person whose name is near the target must keep her own pronunciation. This is the fixture that catches a candidate which fixes the target but corrupts a neighbouring entity (plan §12, rejection proof).",
+      "intended_text": "Ayesha and Aisha are both on the list.",
+      "entities": [
+        { "entity_id": "demo-person-17", "surface": "Ayesha" },
+        { "entity_id": "demo-person-22", "surface": "Aisha" }
+      ],
+      "expect": {
+        "entity_id": "demo-person-17",
+        "pronounced_as": "reference",
+        "unchanged_surfaces": ["list"],
+        "other_entities_unchanged": ["demo-person-22"]
+      }
+    },
+    {
+      "fixture_id": "fx-no-reference-06",
+      "kind": "regression",
+      "required": true,
+      "description": "An entity with NO reference recording (plan §14: missing reference audio). The system must abstain rather than invent a pronunciation, so no repair should apply to it.",
+      "intended_text": "Please confirm with Khadija before we proceed.",
+      "entities": [{ "entity_id": "demo-person-31", "surface": "Khadija" }],
+      "expect": {
+        "entity_id": "demo-person-31",
+        "pronounced_as": "default",
+        "unchanged_surfaces": ["confirm", "proceed"]
+      }
+    }
+  ]
+}

@@ -8,8 +8,17 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "types": ["node"],
-    "lib": ["ES2022", "DOM"]
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
   },
-  "include": ["contracts/**/*.ts", "runtime/**/*.ts"]
+  "include": [
+    "contracts/**/*.ts",
+    "runtime/**/*.ts",
+    "evolve/**/*.ts"
+  ]
 }
